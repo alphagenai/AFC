@@ -18,6 +18,7 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_path
 
 client = bigquery.Client()
 
+## cohort payment timeseries
 SQL = """
 SELECT
     SUM(total_contract_value) as sum_total_contract_value,
@@ -60,4 +61,40 @@ df.index = pd.to_datetime(
 df2 = df[['sum_amount_paid', 'monthdiff']]
 df3 = df2.pivot(columns=['monthdiff'],).astype('float64')
 df4 = df3.cumsum(axis=1)
-df4.to_csv('temp4.csv')
+df4.sort_index()to_csv('temp4.csv')
+
+
+## total contract amount for each cohort
+sql = """
+SELECT 
+    EXTRACT(YEAR FROM RegistrationDate) AS cohort_year,
+    EXTRACT(MONTH FROM RegistrationDate) AS cohort_month,
+    --SUM(Deposit) AS Deposit,  
+    --SUM(Price) as Price,
+    --SUM(AdditionalFee) as AdditionalFee,
+
+    SUM(Deposit) + SUM(Price) + SUM(AdditionalFee) as TotalContractValue
+
+FROM `afcproj.files_dupe.Contracts_20201117`
+WHERE PaymentMethod = 'FINANCED'
+GROUP BY cohort_month, cohort_year
+"""
+
+
+cohort_contract_sum_df = pd.read_gbq(sql,)
+cohort_contract_sum_df['day'] = 1
+
+cohort_contract_sum_df.index = pd.to_datetime(
+    cohort_contract_sum_df[['cohort_year', 'cohort_month', 'day']].rename(
+                 columns={'cohort_year':'year', 'cohort_month':'month',}
+        )
+    )
+cohort_contract_sum_df.sort_index(inplace=True)
+full_timeseries_df = pd.merge(
+    cohort_contract_sum_df['TotalContractValue'].to_frame(),
+    df4,
+    left_index=True,
+    right_index=True)
+
+amort_timeseries_df = -df4.add(cohort_contract_sum_df['TotalContractValue'], axis=0)
+amort_timeseries_df.to_csv('temp5.csv')
