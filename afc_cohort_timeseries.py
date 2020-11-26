@@ -11,6 +11,9 @@ import os
 import pandas as pd
 from google.cloud import bigquery
 import numpy as np
+import seaborn as sns
+from matplotlib import pyplot as plt
+import matplotlib.ticker as ticker
 
 ## It is necessary to create your Google Authentication keys before accessing BigQuery via Python
 key_path = r"C:\Users\mat4m_000\Documents\Wellow data\SFC\AFCproj-keyfile.json"
@@ -59,9 +62,9 @@ df.index = pd.to_datetime(
     )
 
 df2 = df[['sum_amount_paid', 'monthdiff']]
-df3 = df2.pivot(columns=['monthdiff'],).astype('float64')
+df3 = df2.pivot(columns=['monthdiff'],).astype('float64')['sum_amount_paid']
 df4 = df3.cumsum(axis=1)
-df4.sort_index()to_csv('temp4.csv')
+df4.sort_index().to_csv('temp4.csv')
 
 
 ## total contract amount for each cohort
@@ -97,4 +100,14 @@ full_timeseries_df = pd.merge(
     right_index=True)
 
 amort_timeseries_df = -df4.add(cohort_contract_sum_df['TotalContractValue'], axis=0)
-amort_timeseries_df.to_csv('temp5.csv')
+amort_timeseries_df.to_csv('temp7.csv')
+
+## dafuq is happening here??? how can adding two negatives give the right answer?
+full_df = -df4.add(-cohort_contract_sum_df['TotalContractValue'], axis='index')
+
+full_df.to_csv('temp8.csv')
+df_to_plot = full_df['2017-06-01':]
+df_to_plot.index = df_to_plot.index.month_name() + df_to_plot.index.year.astype('str')
+ax = df_to_plot.T.loc[0:].plot(xticks=range(35))
+ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000000) + 'm'))
+plt.savefig('amortization line chart.png')
