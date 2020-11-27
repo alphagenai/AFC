@@ -148,25 +148,31 @@ amort_timeseries_df.to_csv('temp2.csv')
 
 #full_df = -df4.add(-cohort_contract_sum_df['TotalContractValue'], axis='index')
 
-perc_orig_balance_timeseries_df = -cumsum_timeseries.divide(-cohort_contract_sum_df['TotalContractValue'], axis=0)
+perc_orig_balance_timeseries_df = amort_timeseries_df.divide(cohort_contract_sum_df['TotalContractValue'], axis=0)
 
 def prettify_dfs_for_output(df):
     df = df['2017-06-01':'2020-06-01']
-    df.index = df.index.month_name() + '-' + df.index.year.astype('str')[-2:]
+    df.index = df.index.month_name().map(lambda x : x[:3]) + \
+        df.index.year.astype('str').map(lambda x : '-{}'.format(x[-2:]))
     return df
 
-df_to_plot = prettify_dfs_for_output(amort_timeseries_df).loc[:,0:42]
+amort_df_to_plot = prettify_dfs_for_output(amort_timeseries_df).loc[:,0:42]
+perc_df_to_plot = prettify_dfs_for_output(perc_orig_balance_timeseries_df).loc[:,0:42]
 
 pd.concat(
     [prettify_dfs_for_output(cohort_contract_sum_df['TotalContractValue']), 
-     df_to_plot , ], axis=1,
+     amort_df_to_plot, ], axis=1,
           ).to_csv('Graph_Amort_MW.csv')
                              
 pd.concat(
     [prettify_dfs_for_output(cohort_contract_sum_df['TotalContractValue']), 
-     df_to_plot, ], axis=1,
+     perc_df_to_plot, ], axis=1,
           ).to_csv('Graph_Amort_MW_perc_orig_balance.csv')
 
-ax = df_to_plot.T.plot(xticks=range(35), figsize=(20,8))
+ax = amort_df_to_plot.T.plot(xticks=range(42), figsize=(20,8))
 ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000000) + 'm'))
 plt.savefig('amortization line chart.png')
+
+
+ax = perc_df_to_plot.T.plot(xticks=range(42), figsize=(20,8))
+plt.savefig('perc orig balance line chart.png')
