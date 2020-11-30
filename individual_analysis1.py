@@ -44,6 +44,7 @@ SQL = """
         )
         """
 
+#for contractID in cohort:
 df = pd.read_gbq(SQL, chunksize=10000)
 
 df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:%S')
@@ -53,7 +54,10 @@ df = df.set_index(['ContractId','TransactionTS'])
 df = df.astype('float64')
 df.loc[['1568884',
     '1570013',
-    '1571049']].unstack(0).plot()
+    '1571049']]
+
+MEAN_PAYMENT = df.mean()
+
 
 df = df['AmountPaid'].fillna(0).sort_index()
 df.cumsum(axis=0).plot()
@@ -61,3 +65,4 @@ df.groupby(df.index.date).sum().cumsum(axis=0).plot()  #all payments in one day 
 
 
 AVERAGE_PAYMENT_FREQUENCY = (df.index.max() - df.index.min()).days / df.astype(bool).sum(axis=0) 
+MEAN_PAYMENT_PER_DAY = df.sum()/ (df.index.max() - df.index.min()).days
