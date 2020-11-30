@@ -141,6 +141,17 @@ def read_contract_data_from_bigquery():
     return cohort_contract_sum_df.sort_index(inplace=False)  #['TotalContractValue', 'number_of_contracts']
 
 
+def make_cohort_columns_as_index(df):
+    df['day'] = 1
+    
+    df.index = pd.to_datetime(
+        df[['cohort_year', 'cohort_month', 'day']].rename(
+                     columns={'cohort_year':'year', 'cohort_month':'month',}
+            )
+        )
+    
+    return df.drop(columns=['day']).sort_index()
+
 def prettify_dfs_for_output(df):
     df = df['2017-06-01':'2020-06-01']
     df.index = df.index.month_name().map(lambda x : x[:3]) + \
