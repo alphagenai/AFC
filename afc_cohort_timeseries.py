@@ -14,6 +14,8 @@ import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt
 import matplotlib.ticker as ticker
+import seaborn as sns
+sns.set()
 
 ## It is necessary to create your Google Authentication keys before accessing BigQuery via Python
 key_path = r"C:\Users\mat4m_000\Documents\Wellow data\SFC\AFCproj-keyfile.json"
@@ -22,7 +24,7 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_path
 
 
 def read_payment_data_from_bigquery():
-    client = bigquery.Client()
+    #client = bigquery.Client()
     
     ## cohort payment timeseries
     SQL = """
@@ -87,6 +89,8 @@ def read_payment_data_from_bigquery():
             JOIN `afcproj.files_dupe.Contracts_20201117` c
                 on a.ContractId = c.ContractId 
             WHERE c.PaymentMethod = 'FINANCED'
+            and a.BalanceChangeType = 'MANUAL'
+
             )
             
         GROUP BY monthdiff, cohort_year, cohort_month
@@ -120,7 +124,7 @@ def read_contract_data_from_bigquery():
         --SUM(Price) as Price,
         --SUM(AdditionalFee) as AdditionalFee,
     
-        SUM(Deposit) + SUM(Price) + SUM(AdditionalFee) as TotalContractValue, 
+        SUM(Price) + SUM(AdditionalFee) as TotalContractValue, 
         count(ContractId) as number_of_contracts
         
     
@@ -152,15 +156,14 @@ def make_cohort_columns_as_index(df):
     
     return df.drop(columns=['day']).sort_index()
 
-def prettify_dfs_for_output(df):
-    df = df['2017-06-01':'2020-06-01']
+def prettify_dfs_for_output(df, end_date='2020-06-01'):
+    df = df['2017-06-01':end_date]
     df.index = df.index.month_name().map(lambda x : x[:3]) + \
         df.index.year.astype('str').map(lambda x : '-{}'.format(x[-2:]))
     return df
 
 
-if __name__ == "__main__":
-    
+def build_cohort_repayment_schedule():
     payadj_df_grp = read_payment_data_from_bigquery()
     cohort_contract_sum_df = read_contract_data_from_bigquery()
 
@@ -176,7 +179,12 @@ if __name__ == "__main__":
     #full_df = -df4.add(-cohort_contract_sum_df['TotalContractValue'], axis='index')
     
     perc_orig_balance_timeseries_df = amort_timeseries_df.divide(cohort_contract_sum_df['TotalContractValue'], axis=0)
+    return perc_orig_balance_timeseries_df, amort_timeseries_df, cohort_contract_sum_df
+        
+
+if __name__ == "__main__":
     
+    perc_orig_balance_timeseries_df, amort_timeseries_df, cohort_contract_sum_df = build_cohort_repayment_schedule()
     
     amort_df_to_plot = prettify_dfs_for_output(amort_timeseries_df).loc[:,0:42]
     perc_df_to_plot = prettify_dfs_for_output(perc_orig_balance_timeseries_df).loc[:,0:42]
