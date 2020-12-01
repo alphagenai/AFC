@@ -103,6 +103,11 @@ plt.savefig('Cohort Total Repayment.png')
 ax = timeseries_df.sum(axis=0).loc[0:40].plot(kind='bar', figsize=(20,8))
 ax.set_xlabel("Months Since Origination")
 ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000000)+'m'))
+plt.savefig('Average Repayment Through Time.png')
+
+######### Want to create an average repayment as % of original contract balance so far...
+#perc_orig_balance_timeseries_df.sum(axis=0).plot(kind='bar', figsize=(20,8))  #cant sum percentages
+#perc_orig_balance_timeseries_df.mean(axis=0)  #this is the mean using no of cohorts, not number of contracts
 
 
 ## Average Monthly Repayment by Cohort
@@ -124,4 +129,3 @@ ax.set_ylabel("Percentage Monthly Repayment")
 plt.savefig('Average Cohort Repayment.png')
 
 
-## Average Monthly Repayment Over Time
