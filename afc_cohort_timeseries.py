@@ -30,6 +30,7 @@ def read_payment_data_from_bigquery():
     SQL = """
     SELECT
         SUM(AmountPaid) as sum_amount_paid,
+        -- SUM(contract_Value) as total_contract_value -- THIS IS GOING TO DUPLICATE CONTRACT VALUES
         monthdiff,
         EXTRACT(YEAR FROM RegistrationDate) AS cohort_year,
         EXTRACT(MONTH FROM RegistrationDate) AS cohort_month,
@@ -41,7 +42,8 @@ def read_payment_data_from_bigquery():
             p.TransactionTs,
             c.RegistrationDate,       
             datetime_diff(DATETIME(p.TransactionTs), c.RegistrationDate, MONTH) as monthdiff,
-            p.AmountPaid
+            p.AmountPaid, 
+            c.Price + c.AdditionalFee as contract_value
         FROM `afcproj.files_dupe.Payments_2020_11_17` p
         JOIN `afcproj.files_dupe.Contracts_20201117` c
             on p.ContractId = c.ContractId 

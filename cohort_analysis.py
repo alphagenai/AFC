@@ -100,11 +100,9 @@ plt.savefig('Cohort Total Repayment.png')
 
 
 ## Average Repayment over time
-timeseries_df.sum(axis=0)
-timeseries_df.sum(axis=0)
-
-.divide( ## need contract value by monthdiff here )
-
+ax = timeseries_df.sum(axis=0).loc[0:40].plot(kind='bar', figsize=(20,8))
+ax.set_xlabel("Months Since Origination")
+ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000000)+'m'))
 
 
 ## Average Monthly Repayment by Cohort
