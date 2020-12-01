@@ -163,11 +163,16 @@ def prettify_dfs_for_output(df, end_date='2020-06-01'):
     return df
 
 
-def build_cohort_repayment_schedule():
+def build_timeseries_of_repayments():
     payadj_df_grp = read_payment_data_from_bigquery()
-    cohort_contract_sum_df = read_contract_data_from_bigquery()
 
     timeseries_df = payadj_df_grp.unstack('monthdiff').astype('float64')['sum_amount_paid']
+    return timeseries_df
+
+def build_cohort_repayment_schedule():
+    cohort_contract_sum_df = read_contract_data_from_bigquery()    
+    timeseries_df = build_timeseries_of_repayments()
+    
     cumsum_timeseries = timeseries_df.cumsum(axis=1)
     cumsum_timeseries.sort_index().to_csv('temp.csv')
     
