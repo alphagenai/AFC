@@ -11,7 +11,8 @@ import pandas as pd
 from google.cloud import bigquery
 import random
 import matplotlib.pyplot as plt
-
+import matplotlib.dates as mdates
+import seaborn as sns
 #from google.oauth2 import service_account
 
 
@@ -60,8 +61,37 @@ hundred_random_IDs = random.sample(df.index.get_level_values(0).unique().values.
 small_df = df.loc[hundred_random_IDs]   # see which IDs --> small_df.index.get_level_values(0).unique()
 
 sdf = small_df['AmountPaid'].unstack(0).fillna(0).sort_index()
-cum_df = sdf.cumsum(axis=0)
 
+
+
+
+### Get Contract info
+
+SQL = """
+    SELECT c.ContractId,
+        Price + AdditionalFee as TotalContractValue,     
+        --c.RegistrationDate 
+    FROM `afcproj.files_dupe.Contracts_20201117` c
+    join `afcproj.files_dupe.jan_19_cohort` j
+        on c.ContractId = j.ContractId
+    """
+cdf = pd.read_gbq(SQL,index_col='ContractId').astype('float64')
+
+
+df = pd.merge(
+    sdf.T,
+    cdf,
+    how='inner',
+    left_index=True,
+    right_index=True)
+
+percent_df = df.divide(df['TotalContractValue'], axis=0).drop(columns=['TotalContractValue'])
+
+cumulative_percent_sdf = percent_df.T.cumsum(axis=0)
+cumulative_percent_sdf.index = pd.to_datetime(cumulative_percent_sdf.index,format='%Y/%m/%d %H:%M:%S')
+
+
+###### Plotting
 ax = cum_df.plot(figsize=(20,8), legend=False, title="Cumulative Payments for 100 Random Contracts in Jan 2019 Cohort")
 ax.set_xlabel("Transaction Date")
 ax.set_ylabel("Total Repayment Amount")
@@ -76,5 +106,32 @@ timeseries_length = (daily_sdf.index.max() - daily_sdf.index.min()).days
 AVERAGE_PAYMENT_FREQUENCY = timeseries_length / daily_sdf.astype(bool).sum(axis=0) 
 MEAN_PAYMENT_PER_DAY = daily_sdf.sum()/ timeseries_length
 
+
+## Smoothed Payments
+daily_cum_sdf.rolling(window=30).mean().plot(figsize=(20,8), legend=False, title="Smoothed Cumulative Payments for 100 Random Contracts in Jan 2019 Cohort")
+ax.set_xlabel("Transaction Date")
+ax.set_ylabel("Total Repayment Amount")
+ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000)+'k'))
+plt.savefig('Smoothed Cumulative Payments for 100 Random Contracts in Jan 2019 Cohort')
+
+
+
+## Percentage Payments
+cumulative_percent_sdf.plot(figsize=(20,8), legend=False, title="Cumulative % Payments for 100 Random Contracts in Jan 2019 Cohort")
+ax.set_xlabel("Transaction Date")
+ax.set_ylabel("Total Repayment Amount % of Contract Value")
+ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0%}'.format(x)))
+plt.savefig('Cumulative percentage Payments for 100 Random Contracts in Jan 2019 Cohort')
+
+
 ## HISTAGRAM OF daily % rePAYMENTS
 
+monthly_sdf
+
+payment_series_array =  percent_df.stack().to_numpy()
+daily_nonzero_percent_payments = payment_series_array[payment_series_array.nonzero()]
+
+sns.histplot(daily_nonzero_percent_payments, bins=100)
+
+np.mean(daily_nonzero_percent_payments)
+scipy.stats.mode(daily_nonzero_percent_payments)

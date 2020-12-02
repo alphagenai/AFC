@@ -206,10 +206,11 @@ if __name__ == "__main__":
          perc_df_to_plot, ], axis=1,
               ).to_csv('Graph_Amort_MW_perc_orig_balance.csv')
     
-    ax = amort_df_to_plot.T.plot(xticks=range(42), figsize=(20,8))
+    ax = amort_df_to_plot.T.plot(xticks=range(42), figsize=(20,8), legend=False, title="Amortization By Cohort")
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000000) + 'm'))
     plt.savefig('amortization line chart.png')
     
     
-    ax = perc_df_to_plot.T.plot(xticks=range(42), figsize=(20,8))
+    ax = perc_df_to_plot.T.plot(xticks=range(42), figsize=(20,8), legend=False, title="Amortization as % of Original Balance")
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0%}'.format(x) ))
     plt.savefig('perc orig balance line chart.png')

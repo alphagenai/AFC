@@ -90,6 +90,11 @@ ax.set_xlabel("Cohort Origination Month")
 
 plt.savefig('Number of contracts+contract value.png')
 
+#Average Cohort Size
+pd.options.display.float_format = '{:,.2f}'.format
+print(ccv.mean(axis=0))
+
+
 ## Total Repayment
 ax = prettify_dfs_for_output(df[['Total Amount Repaid', 'TotalContractValue', 'Percent Repaid']], end_date='2020-10-30').plot(kind='bar', secondary_y=['Percent Repaid'], figsize=(20,8))
 ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000000)+'m'))
