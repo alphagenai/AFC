@@ -13,6 +13,7 @@ import random
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import seaborn as sns
+import matplotlib as mpl
 #from google.oauth2 import service_account
 
 
@@ -85,7 +86,9 @@ df = pd.merge(
     left_index=True,
     right_index=True)
 
-percent_df = df.divide(df['TotalContractValue'], axis=0).drop(columns=['TotalContractValue'])
+contract_values = df['TotalContractValue']
+
+percent_df = df.divide(contract_values, axis=0).drop(columns=['TotalContractValue'])
 
 cumulative_percent_sdf = percent_df.T.cumsum(axis=0)
 cumulative_percent_sdf.index = pd.to_datetime(cumulative_percent_sdf.index,format='%Y/%m/%d %H:%M:%S')
@@ -100,6 +103,8 @@ plt.savefig('Cumulative Payments for 100 Random Contracts in Jan 2019 Cohort')
 
 daily_sdf = sdf.groupby(sdf.index.date).sum() #all payments in one day are grouped together
 daily_cum_sdf = daily_sdf.cumsum(axis=0) 
+monthly_sdf = sdf.groupby(pd.Grouper(freq='M')).sum()
+monthly_cum_sdf = monthly_sdf.cumsum(axis=0)
 
 timeseries_length = (daily_sdf.index.max() - daily_sdf.index.min()).days
 
@@ -124,14 +129,53 @@ ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0%}'.forma
 plt.savefig('Cumulative percentage Payments for 100 Random Contracts in Jan 2019 Cohort')
 
 
-## HISTAGRAM OF daily % rePAYMENTS
 
-monthly_sdf
+## Monthly Percentage Payments
+
+monthly_cum_perc_df = monthly_cum_sdf.divide(contract_values, axis=1)
+
+monthly_cum_perc_df.plot(figsize=(20,8), legend=False, title="Monthly Cumulative % Payments for 100 Random Contracts in Jan 2019 Cohort")
+ax.set_xlabel("Transaction Date")
+ax.set_ylabel("Total Repayment Amount % of Contract Value")
+ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0%}'.format(x)))
+plt.savefig('Monthly Cumulative percentage Payments for 100 Random Contracts in Jan 2019 Cohort')
+
+
+## HISTAGRAM OF daily % rePAYMENTS
 
 payment_series_array =  percent_df.stack().to_numpy()
 daily_nonzero_percent_payments = payment_series_array[payment_series_array.nonzero()]
 
-sns.histplot(daily_nonzero_percent_payments, bins=100)
+f, ax = plt.subplots(figsize=(7, 5))
+plt.yscale('log')
+ax = sns.histplot(daily_nonzero_percent_payments, bins=100, )
+ax.set_title('Daily Payment Histogram')
+ax.set_xlabel('Payment %')
+ax.set_ylabel('Count')
+ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:.0%}'.format(x)))
+plt.savefig('Daily Payment Histogram.png')
 
-np.mean(daily_nonzero_percent_payments)
-scipy.stats.mode(daily_nonzero_percent_payments)
+
+
+## monthly HISTAGRAM OF daily % rePAYMENTS
+
+
+df = pd.merge(
+    monthly_sdf.T,
+    cdf,
+    how='inner',
+    left_index=True,
+    right_index=True)
+
+percent_month_df = df.divide(df['TotalContractValue'], axis=0).drop(columns=['TotalContractValue'])
+month_payment_series_array =  percent_month_df.stack().to_numpy()
+monthly_nonzero_percent_payments = month_payment_series_array[month_payment_series_array.nonzero()]
+
+f, ax = plt.subplots(figsize=(7, 5))
+#plt.yscale('log')
+ax = sns.histplot(monthly_nonzero_percent_payments, bins=100, )
+ax.set_title('Monthly Payment Histogram')
+ax.set_xlabel('Payment %')
+ax.set_ylabel('Count')
+ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:.0%}'.format(x)))
+plt.savefig('Monthly Payment Histogram.png')
