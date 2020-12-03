@@ -37,13 +37,13 @@ if 0:
 
 #### Super Simple Regression Model
 #currently only works for one contract at a time
-df = cumulative_percent_sdf[cumulative_percent_sdf.columns[0:3]] 
+df = cumulative_percent_sdf[cumulative_percent_sdf.columns[0:1]] 
 diff_df = df.diff()
 monthly = df.groupby(pd.Grouper(freq='M')).sum().cumsum().stack().reset_index()
 
 
-enc = OneHotEncoder(handle_unknown='ignore')
-enc.fit(monthly['ContractId'].array.reshape(-1,1))
+#enc = OneHotEncoder(handle_unknown='ignore')
+#enc.fit(monthly['ContractId'].to_numpy().reshape(-1,1))
 
 ols = LinearRegression()
 X = monthly.index.map(dt.datetime.toordinal).to_numpy().reshape(-1,1)
