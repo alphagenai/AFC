@@ -6,7 +6,7 @@ Created on Mon Nov 30 11:47:04 2020
 """
 
 
-import os
+import google_sa_auth
 import pandas as pd
 from google.cloud import bigquery
 import random
@@ -14,11 +14,9 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import seaborn as sns
 import matplotlib as mpl
-#from google.oauth2 import service_account
+import matplotlib.ticker as ticker
 
 
-key_path = r"C:\Users\mat4m_000\Documents\Wellow data\SFC\AFCproj-keyfile.json"
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_path
 #client = bigquery.Client()
 
 
@@ -28,11 +26,13 @@ SQL = """
         p.ContractId
     FROM afcproj.files_dupe.Payments_2020_11_17 p
     inner join afcproj.files_dupe.jan_19_cohort j
-        on p.ContractId = j.ContractId    
+        on p.ContractId = j.ContractId   
+    inner join afcproj.files_dupe.Contracts_20201117 c
+        on c.ContractId = j.ContractId
     WHERE p.paymentStatusTypeEntity != 'REFUSED'
         and
         p.PaymentResultTypeEntity != 'PAYMENT_FREE_CREDIT'
-
+        and c.Product = 'X850'
     UNION ALL
     Select a.CreatedAt,
         a.Amount,
@@ -40,7 +40,11 @@ SQL = """
     FROM afcproj.files_dupe.Adjustments_2020_11_17 a
     inner join afcproj.files_dupe.jan_19_cohort j
         on a.ContractId = j.ContractId
+    inner join afcproj.files_dupe.Contracts_20201117 c
+        on c.ContractId = j.ContractId
+
     WHERE a.BalanceChangeType = 'MANUAL'
+        and c.Product = 'X850'
 
         """
 
@@ -94,12 +98,6 @@ cumulative_percent_sdf = percent_df.T.cumsum(axis=0)
 cumulative_percent_sdf.index = pd.to_datetime(cumulative_percent_sdf.index,format='%Y/%m/%d %H:%M:%S')
 
 
-###### Plotting
-ax = cum_df.plot(figsize=(20,8), legend=False, title="Cumulative Payments for 100 Random Contracts in Jan 2019 Cohort")
-ax.set_xlabel("Transaction Date")
-ax.set_ylabel("Total Repayment Amount")
-ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000)+'k'))
-plt.savefig('Cumulative Payments for 100 Random Contracts in Jan 2019 Cohort')
 
 daily_sdf = sdf.groupby(sdf.index.date).sum() #all payments in one day are grouped together
 daily_cum_sdf = daily_sdf.cumsum(axis=0) 
@@ -111,13 +109,21 @@ timeseries_length = (daily_sdf.index.max() - daily_sdf.index.min()).days
 AVERAGE_PAYMENT_FREQUENCY = timeseries_length / daily_sdf.astype(bool).sum(axis=0) 
 MEAN_PAYMENT_PER_DAY = daily_sdf.sum()/ timeseries_length
 
+###### Plotting
+## Daily Payments
+ax = daily_cum_sdf.plot(figsize=(20,8), legend=False, title="Cumulative Payments for 100 Random Contracts in Jan 2019 Cohort")
+ax.set_xlabel("Transaction Date")
+ax.set_ylabel("Total Repayment Amount")
+ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000)+'k'))
+plt.savefig('Cumulative Payments for 100 Random X850 Contracts in Jan 2019 Cohort')
+
 
 ## Smoothed Payments
 daily_cum_sdf.rolling(window=30).mean().plot(figsize=(20,8), legend=False, title="Smoothed Cumulative Payments for 100 Random Contracts in Jan 2019 Cohort")
 ax.set_xlabel("Transaction Date")
 ax.set_ylabel("Total Repayment Amount")
 ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000)+'k'))
-plt.savefig('Smoothed Cumulative Payments for 100 Random Contracts in Jan 2019 Cohort')
+plt.savefig('Smoothed Cumulative Payments for 100 Random  X850 Contracts in Jan 2019 Cohort')
 
 
 

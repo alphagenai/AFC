@@ -25,4 +25,11 @@ all_features = pd.merge(small_df,
          cdf,
          how='inner',
          left_index=True,
-         right_index=True)
+         right_index=True).sort_index()
+
+
+#1. lets look at if theres any autocorrelation. what lag?
+
+for contract_series in data[0:5]:
+    plot_acf(series, lags=20)
+    plt.show()
