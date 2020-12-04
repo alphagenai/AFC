@@ -48,18 +48,22 @@ if 0:
 
 #### Super Simple Regression Model
 #currently only works for one contract at a time
-small_df = create_small_df()
-sdf = small_df['AmountPaid'].unstack(0).fillna(0).sort_index()
-monthly_sdf = sdf.groupby(pd.Grouper(freq='M')).sum()
 
-df = create_cumulative_percent_sdf(monthly_sdf)
-
-contractIds = cumulative_percent_sdf.columns[0:3]
-df = df[contractIds] 
-#diff_df = df.diff()
-
-monthly = df.stack().reset_index()
-
+if required:
+    small_df = create_small_df()
+    sdf = small_df['AmountPaid'].unstack(0).fillna(0).sort_index()
+    monthly_sdf = sdf.groupby(pd.Grouper(freq='M')).sum()
+    
+    df = create_cumulative_percent_sdf(monthly_sdf)
+    
+    contractIds = df.columns[0:3]
+    df = df[contractIds] 
+    #diff_df = df.diff()
+    
+    monthly = df.stack().reset_index()
+    
+    monthly.to_pickle('monthly')
+monthly = pd.read_pickle('monthly')
 
 enc = OneHotEncoder(handle_unknown='ignore', sparse=False)
 one_hot_contractIds = enc.fit_transform(monthly['ContractId'].to_numpy().reshape(-1,1))

@@ -35,13 +35,16 @@ from keras.layers import Dense
 from keras.optimizers import Adam
 from individual_analysis1 import create_small_df
 
+if required:
+    small_df = create_small_df()
+    sdf = small_df['AmountPaid'].unstack(0).fillna(0).sort_index()
+    monthly_sdf = sdf.groupby(pd.Grouper(freq='M')).sum()
+    
+    one_contract = monthly_sdf[monthly_sdf.columns[0]]
+    one_contract.index = one_contract.index.tz_localize(None)
+    one_contract.to_pickle('pickle_one_contract')
 
-small_df = create_small_df()
-sdf = small_df['AmountPaid'].unstack(0).fillna(0).sort_index()
-monthly_sdf = sdf.groupby(pd.Grouper(freq='M')).sum()
-
-one_contract = monthly_sdf[monthly_sdf.columns[0]]
-one_contract.index = one_contract.index.tz_localize(None)
+one_contract = pd.read_pickle('pickle_one_contract')
 
 start_date = dt.datetime(2020, 7, 31,) #tzinfo=dt.timezone.utc)
 end_date = dt.datetime(2021, 7, 31,) #tzinfo=dt.timezone.utc)
@@ -50,6 +53,9 @@ end_date = dt.datetime(2020, 11, 30,) #tzinfo=dt.timezone.utc)
 
 train = one_contract.loc[one_contract.index < pd.to_datetime(start_date)]
 test = one_contract.loc[one_contract.index >= pd.to_datetime(start_date)]
+
+
+### SARIMAX
 
 model = SARIMAX(train, order=(2, 1, 3))
 results = model.fit(disp=True)
@@ -60,3 +66,29 @@ l1, = plt.plot(one_contract, label='Observation')
 l2, = plt.plot(sarimax_prediction, label='ARIMA')
 plt.legend(handles=[l1, l2])
 plt.savefig('SARIMAX prediction', bbox_inches='tight', transparent=False)
+
+print('SARIMAX MAE = ', mean_absolute_error(sarimax_prediction, test))
+
+
+model = pm.auto_arima(train, start_p=1, start_q=1,
+                      test='adf',       # use adftest to find optimal 'd'
+                      max_p=3, max_q=3,  # maximum p and q
+                      m=1,              # frequency of series
+                      d=None,           # let model determine 'd'
+                      seasonal=False,   # No Seasonality
+                      start_P=0,
+                      D=0,
+                      trace=True,
+                      error_action='ignore',
+                      suppress_warnings=True,
+                      stepwise=True)
+
+print(model.summary())
+
+
+
+### Prophet
+
+train['ds'] = train.index.values
+m = Prophet()
+m.fit(train)
