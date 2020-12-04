@@ -68,7 +68,7 @@ def create_small_df():
     small_df = df.loc[hundred_random_IDs]   # see which IDs --> small_df.index.get_level_values(0).unique()
     return small_df
 
-def create_cumulative_percent_sdf(daily_sdf):
+def create_cumulative_percent_sdf(input_df):
     
     
     ### Get Contract info
@@ -85,7 +85,7 @@ def create_cumulative_percent_sdf(daily_sdf):
     
     
     contract_ts = pd.merge(
-        daily_sdf.T,
+        input_df.T,
         cdf,
         how='inner',
         left_index=True,
@@ -100,19 +100,22 @@ def create_cumulative_percent_sdf(daily_sdf):
     
     return cumulative_percent_sdf
 
-small_df = create_small_df()
-sdf = small_df['AmountPaid'].unstack(0).fillna(0).sort_index()
-
-daily_sdf = sdf.groupby(sdf.index.date).sum() #all payments in one day are grouped together
+def convert_to_daily(small_df ):
+    sdf = small_df['AmountPaid'].unstack(0).fillna(0).sort_index()
     
-    
-daily_cum_sdf = daily_sdf.cumsum(axis=0) 
-monthly_sdf = sdf.groupby(pd.Grouper(freq='M')).sum()
-monthly_cum_sdf = monthly_sdf.cumsum(axis=0)
-
+    daily_sdf = sdf.groupby(sdf.index.date).sum() #all payments in one day are grouped together
+    return daily_sdf
 
 
 if __name__ == "__main__":
+    small_df = create_small_df()
+    daily_sdf = convert_to_daily(small_df)
+        
+    daily_cum_sdf = daily_sdf.cumsum(axis=0) 
+    monthly_sdf = sdf.groupby(pd.Grouper(freq='M')).sum()
+    monthly_cum_sdf = monthly_sdf.cumsum(axis=0)
+
+
     timeseries_length = (daily_sdf.index.max() - daily_sdf.index.min()).days
 
 
@@ -199,3 +202,9 @@ if __name__ == "__main__":
     ax.set_ylabel('Count')
     ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:.0%}'.format(x)))
     plt.savefig('Monthly Payment Histogram.png')
+    
+    
+    ### Monthly bar plot of 100 contracts monthly payments
+    monthly_sdf.plot(kind='bar')
+    
+    monthly_sdf[monthly_sdf.columns[0]].plot()
