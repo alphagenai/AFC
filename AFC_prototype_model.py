@@ -9,7 +9,7 @@ import pandas as pd
 import datetime as dt
 import numpy as np
 
-from sklearn.linear_model import LinearRegression, Ridge, LogisticRegression
+from sklearn.linear_model import LinearRegression, Ridge, LogisticRegression, TheilSenRegressor, TweedieRegressor
 from sklearn.ensemble import RandomForestRegressor, HistGradientBoostingRegressor
 from sklearn.svm import SVR
 from sklearn.preprocessing import OneHotEncoder
@@ -20,24 +20,6 @@ from individual_analysis1 import create_small_df, create_cumulative_percent_sdf,
 
 
 
-## assemble features
-
-if 0:
-    contract_sql = """
-        SELECT c.*,
-            Price + AdditionalFee as TotalContractValue,     
-        FROM `afcproj.files_dupe.Contracts_20201117` c
-        join `afcproj.files_dupe.jan_19_cohort` j
-            on c.ContractId = j.ContractId
-            """
-    cdf = pd.read_gbq(contract_sql,index_col='ContractId') #.astype('float64')
-    
-    
-    all_features = pd.merge(small_df,
-             cdf,
-             how='inner',
-             left_index=True,
-             right_index=True).sort_index()
 
 
 ### TO DO: 
@@ -54,13 +36,13 @@ if required:
     sdf = small_df['AmountPaid'].unstack(0).fillna(0).sort_index()
     monthly_sdf = sdf.groupby(pd.Grouper(freq='M')).sum()
     
-    df = create_cumulative_percent_sdf(monthly_sdf)
+    monthly_cumulative_percent_sdf = create_cumulative_percent_sdf(monthly_sdf)
     
     contractIds = df.columns[0:3]
     df = df[contractIds] 
     #diff_df = df.diff()
     
-    monthly = df.stack().reset_index()
+    monthly = monthly_cumulative_percent_sdf.stack().reset_index()
     
     monthly.to_pickle('monthly')
 monthly = pd.read_pickle('monthly')
@@ -85,10 +67,12 @@ for model in [
               #Ridge(),
               #HistGradientBoostingRegressor(),
               #LogisticRegression(),
-              SVR(),
-              svr_rbf,
-              svr_lin,
-              svr_poly,
+#              SVR(),
+#              svr_rbf,
+#              svr_lin,
+#              svr_poly,
+#              TheilSenRegressor(),
+              TweedieRegressor(power=2, link='log')
               ]:
     fit_and_plot(model)
     
