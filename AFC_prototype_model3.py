@@ -131,11 +131,9 @@ if __name__ == "__main__":
     
     models = [SVR(kernel='rbf', C=100, gamma=0.1, epsilon=.1),
               SVR(kernel='linear', C=100, gamma='auto'),
-              SVR(kernel='poly', C=100, gamma='auto', degree=3, epsilon=.1,
-               coef0=1),
+              #SVR(kernel='poly', C=100, gamma='auto', degree=3, epsilon=.1, coef0=1),  ## seems to take a very long time
               RandomForestRegressor(),
-              LinearRegression()
+              LinearRegression(),
               ]
-    for model in models:
-        feature_regression(cum_perc_df, model)
+    feature_regression(cum_perc_df, models)
 
