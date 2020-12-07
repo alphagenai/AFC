@@ -21,7 +21,7 @@ numerical_columns = ['Age', 'TotalContractValue',]
 
 
 df = pd.merge(all_features,
-         last_payment,
+         target_payment,
          left_index=True,
          right_index=True,
          )
@@ -30,8 +30,8 @@ df = pd.merge(all_features,
 cat_cols = categorical_columns + binary_columns
 
 
-cat_df_to_plot = df[cols+[pd.Timestamp('2020-11-30 00:00:00')]]
-payment_df_to_plot = all_features.drop(columns=cols)
+cat_df_to_plot = df[cat_cols+[18]]
+payment_df_to_plot = all_features.drop(columns=cat_cols )
 sns.pairplot(payment_df_to_plot,) #hue='Age');
 
 sns.catplot(x="Occupation", y=pd.Timestamp('2020-11-30 00:00:00'), kind="swarm", data=cat_df_to_plot)

@@ -17,13 +17,16 @@ import matplotlib as mpl
 import matplotlib.ticker as ticker
 
 
-#client = bigquery.Client()
+def month_diff(a, b):
+    return 12 * (a.dt.year - b.dt.year) + (a.dt.month - b.dt.month)
 
-def create_small_df(size=100):    
+
+def create_small_df(size=100, limit=0, use_monthdiff=False):    
     SQL = """ 
         Select p.TransactionTS,
             p.AmountPaid,
-            p.ContractId
+            p.ContractId, 
+            c.RegistrationDate
         FROM afcproj.files_dupe.Payments_2020_11_17 p
         inner join afcproj.files_dupe.jan_19_cohort j
             on p.ContractId = j.ContractId   
@@ -37,7 +40,8 @@ def create_small_df(size=100):
         UNION ALL
         Select a.CreatedAt,
             a.Amount,
-            a.ContractId
+            a.ContractId, 
+            c.RegistrationDate
         FROM afcproj.files_dupe.Adjustments_2020_11_17 a
         inner join afcproj.files_dupe.jan_19_cohort j
             on a.ContractId = j.ContractId
@@ -51,24 +55,32 @@ def create_small_df(size=100):
             """
     
     #for contractID in cohort:
+    if limit:
+        SQL = SQL + " LIMIT {}".format(limit)
     df = pd.read_gbq(SQL,) #chunksize=10000) #chunksize doesnt work
     
-    df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:%S')
+    if use_monthdiff:
+        df['monthdiff'] = month_diff(df['TransactionTS'].dt.tz_localize(None), df['RegistrationDate']).clip(0,None)
+        df = df.groupby(['ContractId','monthdiff']).sum()
     
-    df = df.set_index(['ContractId','TransactionTS'])
+    else:
+        
+        df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:%S')
+        
+        df = df.set_index(['ContractId','TransactionTS'])
                   
     df = df.astype('float64')
-    
-    
-    MEAN_PAYMENT = df.mean()
-    
-    
+    df = reduce_df_size(df, size=size)
+    return df
+
+def reduce_df_size(df, size):
+        
     sample_random_IDs = random.sample(df.index.get_level_values(0).unique().values.tolist(), k=size)
     
     small_df = df.loc[sample_random_IDs]   # see which IDs --> small_df.index.get_level_values(0).unique()
     return small_df
 
-def create_cumulative_percent_sdf(input_df):
+def create_percent_sdf(input_df, cumulative=True, use_monthdiff=False):
     
     
     ### Get Contract info
@@ -93,12 +105,15 @@ def create_cumulative_percent_sdf(input_df):
     
     contract_values = contract_ts['TotalContractValue']
     
-    percent_df = contract_ts.divide(contract_values, axis=0).drop(columns=['TotalContractValue'])
+    return_df = contract_ts.divide(contract_values, axis=0).drop(columns=['TotalContractValue']).T
+    if cumulative:
+        return_df = return_df.cumsum(axis=0)
+    if use_monthdiff:
+        pass
+    else:
+        return_df.index = pd.to_datetime(return_df.index,format='%Y/%m/%d %H:%M:%S')
     
-    cumulative_percent_sdf = percent_df.T.cumsum(axis=0)
-    cumulative_percent_sdf.index = pd.to_datetime(cumulative_percent_sdf.index,format='%Y/%m/%d %H:%M:%S')
-    
-    return cumulative_percent_sdf
+    return return_df
 
 def convert_to_daily(small_df ):
     sdf = small_df['AmountPaid'].unstack(0).fillna(0).sort_index()

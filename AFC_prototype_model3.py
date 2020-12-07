@@ -8,7 +8,7 @@ Created on Sun Dec  6 00:33:48 2020
 
 import pandas as pd
 
-from individual_analysis1 import create_small_df, create_cumulative_percent_sdf
+from individual_analysis1 import create_small_df, create_percent_sdf
 
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from sklearn.impute import SimpleImputer
@@ -39,12 +39,15 @@ TO DO: Change from dates to monthdiffs so that all cohorts can be run together
 
 """
 
-def feature_regression(input_df, models_list):   ## input df is currently a montly cumulative percentage
+def feature_regression(input_df, models_list, target_monthdiff=18):   ## input df is currently a montly cumulative percentage
     ### assemble 6 months of payments features    
     
-    first_6_month_payments = input_df['2019-01-01':'2019-06-01']
-    last_payment = input_df.loc[input_df.index.max()]
-    last_payment.sort_values().plot(kind='bar')
+    first_6_month_payments = input_df[0:6]
+    target_payment = input_df.loc[target_monthdiff].sort_values()
+
+    ##Plot what these target payments look like
+    ## A priori spread of final payments is pretty linear
+    target_payment.plot(kind='bar')
     payments_feature_df = first_6_month_payments.T
     
     ## assemble other features
@@ -85,7 +88,7 @@ def feature_regression(input_df, models_list):   ## input df is currently a mont
     
     
     X = all_features.sort_index()
-    y = last_payment.sort_index()
+    y = target_payment.sort_index()
     
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.33, random_state=42)
@@ -123,17 +126,16 @@ if __name__ == "__main__":
     try:
         print(small_df.head(1))
     except NameError:
-        small_df = create_small_df(size=1000)
-    sdf = small_df['AmountPaid'].groupby([small_df.index.get_level_values(1).date, small_df.index.get_level_values(0)]).sum().unstack('ContractId').fillna(0).sort_index()
-    sdf.index = pd.to_datetime(sdf.index)
-    monthly_sdf = sdf.groupby(pd.Grouper(freq='M')).sum()
-    cum_perc_df = create_cumulative_percent_sdf(monthly_sdf)
+        small_df = create_small_df(size=1000, use_monthdiff=True)
+    monthly_sdf = small_df['AmountPaid'].unstack('ContractId').fillna(0).sort_index()
+
+    ##using monthdiff appears to make the model worse - WHY???
+    cum_perc_df = create_percent_sdf(monthly_sdf, use_monthdiff=True)
     
-    models = [SVR(kernel='rbf', C=100, gamma=0.1, epsilon=.1),
-              SVR(kernel='linear', C=100, gamma='auto'),
-              #SVR(kernel='poly', C=100, gamma='auto', degree=3, epsilon=.1, coef0=1),  ## seems to take a very long time
-              RandomForestRegressor(),
+    models = [RandomForestRegressor(),
               LinearRegression(),
               ]
+    
+    ## Need to rework the target column if not using cumulative percentages
     feature_regression(cum_perc_df, models)
 
