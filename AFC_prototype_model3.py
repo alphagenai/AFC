@@ -27,7 +27,7 @@ from matplotlib import pyplot as plt
 import seaborn as sns
 
 
-from sklearn.linear_model import LinearRegression, Ridge, LogisticRegression, TheilSenRegressor, TweedieRegressor
+from sklearn.linear_model import LinearRegression, Ridge, LogisticRegression, TheilSenRegressor, TweedieRegressor, SGDRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.svm import SVR
 
@@ -35,7 +35,9 @@ from sklearn.svm import SVR
 
 """
 
-TO DO: Change from dates to monthdiffs so that all cohorts can be run together
+TO DO: 
+    1. Change from dates to monthdiffs so that all cohorts can be run together
+    2. WHy is the monthdiff 0 column = NaN ?
 
 """
 
@@ -51,7 +53,8 @@ def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=F
 
     ##Plot what these target payments look like
     ## A priori spread of final payments is pretty linear
-    target_payment.plot(kind='bar')
+    #target_payment.plot(kind='bar')
+    
     payments_feature_df = first_6_month_payments.T
     
     ## assemble other features
@@ -68,7 +71,7 @@ def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=F
         join `afcproj.files_dupe.jan_19_cohort` j
             on c.ContractId = j.ContractId
             """
-    cfdf = pd.read_gbq(contract_sql,index_col='ContractId') #.astype('float64')
+    cfdf = pd.read_gbq(contract_sql, index_col='ContractId', dialect='standard')  #.astype('float64')
     
     all_features = pd.merge(payments_feature_df,
              cfdf,
@@ -113,7 +116,7 @@ def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=F
             pipe.fit(X_train,y_train)
         except Exception as e:
             print(e)
-            return all_features   # for debugging
+            return pipe, all_features   # for debugging
         print('time taken to fit model: {:.2f}'.format(time.process_time() - start))
         
 
@@ -127,17 +130,26 @@ def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=F
         plt.title(model)
         plt.show()
         
+        plot_in_sample(pipe, X_train, y_train)
         
-        #model.score(X,y)
+    return (pipe, X, y), None
+        
 
+def plot_in_sample(pipe, X, y):
+    
+    y_pred = pipe.predict(X)
+    fig,ax = plt.subplots()
+    for col in range(0,6):
+        plt.scatter(X[col], y, color='black')
+        plt.scatter(X[col], y_pred, color='red')
 
 
 if __name__ == "__main__":
-    
-    try:
+    try:  #why isnt this working?
         print(small_df.head(1))
     except NameError:
-        small_df = create_small_df(size=100, use_monthdiff=True)
+        print("SMALL_DF NOT FOUND")
+        small_df = create_small_df(size=1000, use_monthdiff=True)
     monthly_sdf = small_df['AmountPaid'].unstack('ContractId').fillna(0).sort_index()
 
     ##using monthdiff appears to make the model worse - WHY???
@@ -145,8 +157,14 @@ if __name__ == "__main__":
     
     models = [RandomForestRegressor(),
               LinearRegression(),
+              SGDRegressor(), 
+              #SGDRegressor(loss='log')
               ]
     
     ## Need to rework the target column if not using cumulative percentages
-    feature_df_on_error = feature_regression(df_for_model, models, calc_cumsum=(True))
+    (pipe, X, y), feature_df_on_error = feature_regression(df_for_model, models, calc_cumsum=True)
 
+
+    cum_df_for_model = create_percent_sdf(monthly_sdf, use_monthdiff=True, cumulative=True)
+
+    (pipe, X, y), feature_df_on_error = feature_regression(cum_df_for_model, models, calc_cumsum=False)
