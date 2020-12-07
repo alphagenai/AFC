@@ -39,10 +39,14 @@ TO DO: Change from dates to monthdiffs so that all cohorts can be run together
 
 """
 
-def feature_regression(input_df, models_list, target_monthdiff=18):   ## input df is currently a montly cumulative percentage
+def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=False):   ## input df is currently a montly cumulative percentage
     ### assemble 6 months of payments features    
     
     first_6_month_payments = input_df[0:6]
+    
+    if calc_cumsum:
+        input_df = input_df.cumsum(axis=0)
+    
     target_payment = input_df.loc[target_monthdiff].sort_values()
 
     ##Plot what these target payments look like
@@ -105,10 +109,17 @@ def feature_regression(input_df, models_list, target_monthdiff=18):   ## input d
 
 
         start = time.process_time()
-    
-        pipe.fit(X_train,y_train)
+        try:
+            pipe.fit(X_train,y_train)
+        except Exception as e:
+            print(e)
+            return all_features   # for debugging
         print('time taken to fit model: {:.2f}'.format(time.process_time() - start))
         
+
+        ##### PLOT INSAMPLE FITS like model 1
+        
+
         pred_error = pipe.predict(X_test)-y_test
         
         fig, ax = plt.subplots()
@@ -126,16 +137,16 @@ if __name__ == "__main__":
     try:
         print(small_df.head(1))
     except NameError:
-        small_df = create_small_df(size=1000, use_monthdiff=True)
+        small_df = create_small_df(size=100, use_monthdiff=True)
     monthly_sdf = small_df['AmountPaid'].unstack('ContractId').fillna(0).sort_index()
 
     ##using monthdiff appears to make the model worse - WHY???
-    cum_perc_df = create_percent_sdf(monthly_sdf, use_monthdiff=True)
+    df_for_model = create_percent_sdf(monthly_sdf, use_monthdiff=True, cumulative=False)
     
     models = [RandomForestRegressor(),
               LinearRegression(),
               ]
     
     ## Need to rework the target column if not using cumulative percentages
-    feature_regression(cum_perc_df, models)
+    feature_df_on_error = feature_regression(df_for_model, models, calc_cumsum=(True))
 

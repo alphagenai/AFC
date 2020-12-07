@@ -26,6 +26,7 @@ from individual_analysis1 import create_small_df, create_cumulative_percent_sdf,
 """ 
     1. Try some feature engineering like [time since last payment] and [size of last payment]
     2. Treat every day like a random variable with baysian probability of receiving a payment
+    3. Try clustering to see if an algo can identify regular/stepper payers
 """
 
 #### Super Simple Regression Model
