@@ -35,3 +35,15 @@ payment_df_to_plot = all_features.drop(columns=cols)
 sns.pairplot(payment_df_to_plot,) #hue='Age');
 
 sns.catplot(x="Occupation", y=pd.Timestamp('2020-11-30 00:00:00'), kind="swarm", data=cat_df_to_plot)
+
+sns.stripplot(x="Occupation", y=pd.Timestamp('2020-11-30 00:00:00'), data=cat_df_to_plot)
+
+## Super Interesting!
+sns.stripplot(x="Region", y=pd.Timestamp('2020-11-30 00:00:00'), data=cat_df_to_plot)
+
+sns.stripplot(x="TotalContractValue", y=pd.Timestamp('2020-11-30 00:00:00'), data=cat_df_to_plot)
+
+
+## Also Interesting
+sns.catplot(x="TotalContractValue", y=pd.Timestamp('2020-11-30 00:00:00'), kind="swarm", 
+            data=cat_df_to_plot, height=25)
