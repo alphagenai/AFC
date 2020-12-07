@@ -18,68 +18,91 @@ from sklearn.ensemble import RandomForestRegressor
 #from sklearn_pandas import DataFrameMapper
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
 from sklearn.pipeline import Pipeline
-#from sklearn.model_selection import train_test_split  -- want to use timeseries split
-
-### assemble 6 months of payments features
-
-#first_6_month_payments = small_df.sort_index().xs(slice('2019-01-01', '2019-06-01'), level='TransactionTS', drop_level=False)
-#monthly_6m = first_6_month_payments.groupby(pd.Grouper(freq='M')).sum()
+from sklearn.model_selection import train_test_split
+import time
 
 
-first_6_month_payments = monthly_cumulative_percent_sdf['2019-01-01':'2019-06-01']
-last_payment = monthly_cumulative_percent_sdf.loc[monthly_cumulative_percent_sdf.index.max()]
-last_payment.sort_values().plot(kind='bar')
-payments_feature_df = first_6_month_payments.T
-
-## assemble other features
-
-contract_sql = """
-    SELECT c.ContractId,
-            c.MainApplicantGender, 
-            c.Age, 
-            c.Region,
-            c.Town,
-            c.Occupation, 
-        Price + AdditionalFee as TotalContractValue,     
-    FROM `afcproj.files_dupe.Contracts_20201117` c
-    join `afcproj.files_dupe.jan_19_cohort` j
-        on c.ContractId = j.ContractId
-        """
-cfdf = pd.read_gbq(contract_sql,index_col='ContractId') #.astype('float64')
-
-all_features = pd.merge(payments_feature_df,
-         cfdf,
-         how='inner',
-         left_index=True,
-         right_index=True).sort_index()
-
-categorical_columns = [ 'MainApplicantGender',
-                        'Region',
-                        'Town',
-                        'Occupation',]
-numerical_columns = ['Age', 'TotalContractValue',]
-
-preprocessor = make_column_transformer(
-    (OneHotEncoder(drop='if_binary'), categorical_columns),
-#    (LabelEncoder(), categorical_columns),  #gives error
-    remainder='passthrough'
-    )
-
-model = make_pipeline(
-    preprocessor,
-    SimpleImputer(strategy='mean'),
-    RandomForestRegressor(),
-    )
 
 
-X = all_features.sort_index()
-y = last_payment.sort_index()
+def feature_regression(input_df):
+    ### assemble 6 months of payments features
+    
+    #first_6_month_payments = small_df.sort_index().xs(slice('2019-01-01', '2019-06-01'), level='TransactionTS', drop_level=False)
+    #monthly_6m = first_6_month_payments.groupby(pd.Grouper(freq='M')).sum()
+    
+    
+    first_6_month_payments = monthly_cumulative_percent_sdf['2019-01-01':'2019-06-01']
+    last_payment = monthly_cumulative_percent_sdf.loc[monthly_cumulative_percent_sdf.index.max()]
+    last_payment.sort_values().plot(kind='bar')
+    payments_feature_df = first_6_month_payments.T
+    
+    ## assemble other features
+    
+    contract_sql = """
+        SELECT c.ContractId,
+                c.MainApplicantGender, 
+                c.Age, 
+                c.Region,
+                c.Town,
+                c.Occupation, 
+            Price + AdditionalFee as TotalContractValue,     
+        FROM `afcproj.files_dupe.Contracts_20201117` c
+        join `afcproj.files_dupe.jan_19_cohort` j
+            on c.ContractId = j.ContractId
+            """
+    cfdf = pd.read_gbq(contract_sql,index_col='ContractId') #.astype('float64')
+    
+    all_features = pd.merge(payments_feature_df,
+             cfdf,
+             how='inner',
+             left_index=True,
+             right_index=True).sort_index()
+    
+    categorical_columns = [ 'MainApplicantGender',
+                            'Region',
+                            'Town',
+                            'Occupation',]
+    numerical_columns = ['Age', 'TotalContractValue',]
+    
+    preprocessor = make_column_transformer(
+        (OneHotEncoder(drop='if_binary'), categorical_columns),
+    #    (LabelEncoder(), categorical_columns),  #gives error
+        remainder='passthrough'
+        )
+    
+    model = RandomForestRegressor()
+    
+    pipe = make_pipeline(
+        preprocessor,
+        SimpleImputer(strategy='mean'),
+        model,
+        )
+    
+    
+    X = all_features.sort_index()
+    y = last_payment.sort_index()
+    
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.33, random_state=42)
 
-model.fit(X,y)
+    start = time.process_time()
 
-model.predict(X)
+    pipe.fit(X,y)
+    print('time taken to fit model: {:.2f}'.format(time.process_time() - start))
+    
+    fig, ax = plt.subplots()
+    ax = sns.histplot(model.predict(X)-y)
+    plt.show()
+    
+    
+    #model.score(X,y)
 
-model.score(X,y)
+
+
+if __name__ == "__main__":
+    
+    small_df = create_small_df(size=1000)
+    cum_perc_df = create_cumulative_percent_sdf(small_df)
 
 '''
 
