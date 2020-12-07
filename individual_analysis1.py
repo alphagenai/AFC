@@ -63,9 +63,9 @@ def create_small_df(size=100):
     MEAN_PAYMENT = df.mean()
     
     
-    hundred_random_IDs = random.sample(df.index.get_level_values(0).unique().values.tolist(), k=size)
+    sample_random_IDs = random.sample(df.index.get_level_values(0).unique().values.tolist(), k=size)
     
-    small_df = df.loc[hundred_random_IDs]   # see which IDs --> small_df.index.get_level_values(0).unique()
+    small_df = df.loc[sample_random_IDs]   # see which IDs --> small_df.index.get_level_values(0).unique()
     return small_df
 
 def create_cumulative_percent_sdf(input_df):
