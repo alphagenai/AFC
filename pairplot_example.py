@@ -12,6 +12,9 @@ import seaborn as sns
 sns.set()
 
 
+all_features, target_payment = create_features(df_for_model, target_monthdiff=18, calc_cumsum=True)
+
+
 categorical_columns = [ 'Region',
                          'Town',
                          'Occupation',]
@@ -31,19 +34,24 @@ cat_cols = categorical_columns + binary_columns
 
 
 cat_df_to_plot = df[cat_cols+[18]]
-payment_df_to_plot = all_features.drop(columns=cat_cols )
-sns.pairplot(payment_df_to_plot,) #hue='Age');
+payment_df_to_plot = all_features.drop(columns=cat_cols)
+sns.pairplot(df[list(range(0,6))+[18,]], height=6) #hue='Age');
+plt.savefig('Pairplot.png')
 
 sns.catplot(x="Occupation", y=pd.Timestamp('2020-11-30 00:00:00'), kind="swarm", data=cat_df_to_plot)
 
 sns.stripplot(x="Occupation", y=pd.Timestamp('2020-11-30 00:00:00'), data=cat_df_to_plot)
 
 ## Super Interesting!
-sns.stripplot(x="Region", y=pd.Timestamp('2020-11-30 00:00:00'), data=cat_df_to_plot)
+fig, ax = plt.subplots()
+sns.stripplot(x="Region", y=18, data=cat_df_to_plot)
+sns.catplot(x="Region", y=18, kind="swarm", data=cat_df_to_plot, height=8)
+plt.savefig('Region feature.png')
 
 sns.stripplot(x="TotalContractValue", y=pd.Timestamp('2020-11-30 00:00:00'), data=cat_df_to_plot)
 
 
 ## Also Interesting
-sns.catplot(x="TotalContractValue", y=pd.Timestamp('2020-11-30 00:00:00'), kind="swarm", 
-            data=cat_df_to_plot, height=25)
+sns.catplot(x="TotalContractValue", y=18, kind="swarm", 
+            data=df, height=25)
+plt.savefig('Total Contract Value Feature.png')

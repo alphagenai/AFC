@@ -41,15 +41,15 @@ TO DO:
 
 """
 
-def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=False):   ## input df is currently a montly cumulative percentage
+def create_features(input_df, target_monthdiff, calc_cumsum):
     ### assemble 6 months of payments features    
     
-    first_6_month_payments = input_df[0:6]
+    first_6_month_payments = input_df.iloc[0:6]  #slicing on index
     
     if calc_cumsum:
         input_df = input_df.cumsum(axis=0)
     
-    target_payment = input_df.loc[target_monthdiff].sort_values()
+    target_payment = input_df.loc[target_monthdiff].sort_values()   # some cumulative payments are greater than 1 ?
 
     ##Plot what these target payments look like
     ## A priori spread of final payments is pretty linear
@@ -78,7 +78,13 @@ def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=F
              how='inner',
              left_index=True,
              right_index=True).sort_index()
+    return all_features, target_payment  
+
+
+def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=False):   ## input df is currently a montly cumulative percentage
     
+
+    all_features, target_payment = create_features(input_df, target_monthdiff, calc_cumsum)
     categorical_columns = [ 'Region',
                             'Town',
                             'Occupation',]
@@ -118,31 +124,33 @@ def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=F
             print(e)
             return pipe, all_features   # for debugging
         print('time taken to fit model: {:.2f}'.format(time.process_time() - start))
-        
 
-        ##### PLOT INSAMPLE FITS like model 1
-        
 
         pred_error = pipe.predict(X_test)-y_test
         
         fig, ax = plt.subplots()
         ax = sns.histplot(pred_error)
-        plt.title(model)
+        plt.title('Out of Sample Errors for {}'.format(model))
         plt.show()
+        plt.savefig('{} error histogram'.format(model))
         
-        plot_in_sample(pipe, X_train, y_train)
         
     return (pipe, X, y), None
         
-
+"""
+##cant plot "the regression" through time as we dont regress thru time
 def plot_in_sample(pipe, X, y):
-    
+    ## to do: show time series and regression line
+    X = X.iloc[0:20]
+    y = y.iloc[0:20]
+    cum = X[X.columns[0:6]].cumsum(axis=1)
+    cum.plot()
     y_pred = pipe.predict(X)
     fig,ax = plt.subplots()
     for col in range(0,6):
         plt.scatter(X[col], y, color='black')
         plt.scatter(X[col], y_pred, color='red')
-
+"""
 
 if __name__ == "__main__":
     try:  #why isnt this working?
@@ -155,16 +163,17 @@ if __name__ == "__main__":
     ##using monthdiff appears to make the model worse - WHY???
     df_for_model = create_percent_sdf(monthly_sdf, use_monthdiff=True, cumulative=False)
     
+    
+    
     models = [RandomForestRegressor(),
               LinearRegression(),
-              SGDRegressor(), 
-              #SGDRegressor(loss='log')
+              #SGDRegressor(), # not working
+              #SGDRegressor(loss='log')  # not working
               ]
     
     ## Need to rework the target column if not using cumulative percentages
     (pipe, X, y), feature_df_on_error = feature_regression(df_for_model, models, calc_cumsum=True)
 
 
-    cum_df_for_model = create_percent_sdf(monthly_sdf, use_monthdiff=True, cumulative=True)
-
-    (pipe, X, y), feature_df_on_error = feature_regression(cum_df_for_model, models, calc_cumsum=False)
+    #cum_df_for_model = create_percent_sdf(monthly_sdf, use_monthdiff=True, cumulative=True)
+    #(pipe, X, y), feature_df_on_error = feature_regression(cum_df_for_model, models, calc_cumsum=False)
