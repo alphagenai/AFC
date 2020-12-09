@@ -5,7 +5,7 @@ Created on Fri Dec  4 14:42:18 2020
 @author: mark
 """
 
-import pmdarima as pm
+#import pmdarima as pm
 from statsmodels.tsa.seasonal import seasonal_decompose
 from sklearn.model_selection import TimeSeriesSplit
 import pandas as pd
@@ -17,8 +17,9 @@ import warnings
 import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib.dates as mdates
+import datetime as dt
 
-from xgboost import XGBRegressor
+#from xgboost import XGBRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.preprocessing import OrdinalEncoder
@@ -29,14 +30,16 @@ from statsmodels.tsa.arima_model import ARIMA
 from sklearn.preprocessing import StandardScaler
 from fbprophet import Prophet
 from fbprophet.plot import plot_plotly, add_changepoints_to_plot
-from keras.models import Sequential
-from keras.layers import Dense
+#from keras.models import Sequential
+#from keras.layers import Dense
+#from keras.optimizers import Adam
 
-from keras.optimizers import Adam
 from individual_analysis1 import create_small_df
 
+required=0
+
 if required:
-    small_df = create_small_df()
+    small_df = create_small_df(size=100)
     sdf = small_df['AmountPaid'].unstack(0).fillna(0).sort_index()
     monthly_sdf = sdf.groupby(pd.Grouper(freq='M')).sum()
     
@@ -89,6 +92,8 @@ print(model.summary())
 
 ### Prophet
 
+
+train = train.to_frame().rename(index={'TransactionTS': 'ds'}).rename(columns={'1564609':'y'})
 train['ds'] = train.index.values
 m = Prophet()
 m.fit(train)

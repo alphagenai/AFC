@@ -40,27 +40,32 @@ cat_cols = categorical_columns + binary_columns
 cat_df_to_plot = df[cat_cols+[18]]
 payment_df_to_plot = all_features.drop(columns=cat_cols)
 sns.pairplot(df[list(range(0,6))+[18,]], height=6) #hue='Age');
-plt.savefig('Pairplot.png')
+plt.gcf().subplots_adjust(bottom=0.15)
+plt.savefig('files\\Pairplot.png')
 
 #sns.catplot(x="Occupation", y=pd.Timestamp('2020-11-30 00:00:00'), kind="swarm", data=cat_df_to_plot)
 
 #sns.stripplot(x="Occupation", y=pd.Timestamp('2020-11-30 00:00:00'), data=cat_df_to_plot)
 
-## Super Interesting!
-fig, ax = plt.subplots()
+## Super Interesting! - Region/Covid
+#fig, ax = plt.subplots()
 #sns.stripplot(x="Region", y=18, data=cat_df_to_plot)
 g = sns.catplot(x="Region", y=18, kind="swarm", data=cat_df_to_plot, height=8)
 g.ax.set_xticklabels(g.ax.get_xticklabels(), rotation=30)
-plt.gcf().subplots_adjust(bottom=0.15)
-plt.savefig('Region feature.png')
+
+plt.gcf().subplots_adjust(left=0.15, bottom=0.15)
+plt.savefig('files\\Region feature.png')
 
 
 
 #sns.stripplot(x="TotalContractValue", y=pd.Timestamp('2020-11-30 00:00:00'), data=cat_df_to_plot)
 ## Also Interesting
 sns.catplot(x="TotalContractValue", y=18, kind="swarm", 
-            data=df, height=25)
-plt.savefig('Total Contract Value Feature.png')
+            data=df, height=10)
+plt.xlabel('Contract Value', fontsize=12)
+plt.ylabel('Amount Repaid at Month 18', fontsize=12)
+plt.gcf().subplots_adjust(left=0.15, bottom=0.15)
+plt.savefig('files\\Total Contract Value Feature.png')
 
 ## Not interesting - all X850
 # sns.catplot(x="Product", y=18, kind="swarm", 

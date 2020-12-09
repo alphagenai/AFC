@@ -21,7 +21,7 @@ def month_diff(a, b):
     return 12 * (a.dt.year - b.dt.year) + (a.dt.month - b.dt.month)
 
 
-def create_small_df(size=100, limit=0, use_monthdiff=False, random_seed=42):    
+def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42):    
     SQL = """ 
         Select p.TransactionTS,
             p.AmountPaid,
@@ -69,7 +69,7 @@ def create_small_df(size=100, limit=0, use_monthdiff=False, random_seed=42):
         
         df = df.set_index(['ContractId','TransactionTS'])
                   
-    df = df.astype('float64')
+    df = df.astype('float64', errors='ignore')  ## datetime columns cause errors
     df = reduce_df_size(df, size=size, random_seed=random_seed)
     return df
 
