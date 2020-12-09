@@ -31,6 +31,11 @@ from sklearn.linear_model import LinearRegression, Ridge, LogisticRegression, Th
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.svm import SVR
 
+from sklearn import datasets
+from sklearn.model_selection import cross_val_predict
+from sklearn import linear_model
+import matplotlib.pyplot as plt
+    
 
 
 """
@@ -66,6 +71,7 @@ def create_features(input_df, target_monthdiff, calc_cumsum):
                 c.Region,
                 c.Town,
                 c.Occupation, 
+                c.Product,
             Price + AdditionalFee as TotalContractValue,     
         FROM `afcproj.files_dupe.Contracts_20201117` c
         join `afcproj.files_dupe.jan_19_cohort` j
@@ -87,7 +93,9 @@ def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=F
     all_features, target_payment = create_features(input_df, target_monthdiff, calc_cumsum)
     categorical_columns = [ 'Region',
                             'Town',
-                            'Occupation',]
+                            'Occupation',
+                            'Product',
+                            ]
     numerical_columns = ['Age', 'TotalContractValue',]
     binary_columns = ['MainApplicantGender',]
     
@@ -125,39 +133,45 @@ def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=F
             return pipe, all_features   # for debugging
         print('time taken to fit model: {:.2f}'.format(time.process_time() - start))
 
+        plot_error_histogram(pipe, model, X_test, y_test)
+        plot_actual_v_predicted(pipe, model, X_test, y_test)
 
-        pred_error = pipe.predict(X_test)-y_test
+
+    return (pipe, model, X, y), None
         
-        fig, ax = plt.subplots()
-        ax = sns.histplot(pred_error)
-        plt.title('Out of Sample Errors for {}'.format(model))
-        plt.show()
-        plt.savefig('{} error histogram'.format(model))
-        
-        
-    return (pipe, X, y), None
-        
-"""
-##cant plot "the regression" through time as we dont regress thru time
-def plot_in_sample(pipe, X, y):
-    ## to do: show time series and regression line
-    X = X.iloc[0:20]
-    y = y.iloc[0:20]
-    cum = X[X.columns[0:6]].cumsum(axis=1)
-    cum.plot()
-    y_pred = pipe.predict(X)
-    fig,ax = plt.subplots()
-    for col in range(0,6):
-        plt.scatter(X[col], y, color='black')
-        plt.scatter(X[col], y_pred, color='red')
-"""
+
+def plot_error_histogram(pipe, model, X_test, y_test):
+    pred_error = pipe.predict(X_test)-y_test
+    
+    fig, ax = plt.subplots()
+    ax = sns.histplot(pred_error)
+    plt.title('Out of Sample Errors for {}'.format(model))
+    plt.show()
+    plt.savefig('{} error histogram'.format(model))
+    
+
+def plot_actual_v_predicted(pipe, model, X, y):
+
+    # cross_val_predict returns an array of the same size as `y` where each entry
+    # is a prediction obtained by cross validation:
+    predicted = cross_val_predict(pipe, X, y, cv=10)
+    
+    fig, ax = plt.subplots()
+    ax.scatter(y, predicted)
+    ax.plot([y.min(), y.max()], [y.min(), y.max()], 'k--', lw=4)
+    ax.set_xlabel('Measured')
+    ax.set_ylabel('Predicted')
+    plt.title('Actual vs Predicted for model {}'.format(model))
+    plt.show()
+    plt.savefig('actual vs predicted for {}'.format(model))
+
 
 if __name__ == "__main__":
     try:  #why isnt this working?
         print(small_df.head(1))
     except NameError:
         print("SMALL_DF NOT FOUND")
-        small_df = create_small_df(size=1000, use_monthdiff=True)
+        small_df = create_small_df(size=1000, use_monthdiff=True, random_seed=42)
     monthly_sdf = small_df['AmountPaid'].unstack('ContractId').fillna(0).sort_index()
 
     ##using monthdiff appears to make the model worse - WHY???
@@ -172,8 +186,8 @@ if __name__ == "__main__":
               ]
     
     ## Need to rework the target column if not using cumulative percentages
-    (pipe, X, y), feature_df_on_error = feature_regression(df_for_model, models, calc_cumsum=True)
+    (pipe, model,X, y), feature_df_on_error = feature_regression(df_for_model, models, calc_cumsum=True)
 
-
+    ## Does using cumulative payments enhance the model - probably not as this would introduce massive multicolinearity
     #cum_df_for_model = create_percent_sdf(monthly_sdf, use_monthdiff=True, cumulative=True)
-    #(pipe, X, y), feature_df_on_error = feature_regression(cum_df_for_model, models, calc_cumsum=False)
+    #(pipe, model, X, y), feature_df_on_error = feature_regression(cum_df_for_model, models, calc_cumsum=False)

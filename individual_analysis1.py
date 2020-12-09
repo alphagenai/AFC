@@ -21,7 +21,7 @@ def month_diff(a, b):
     return 12 * (a.dt.year - b.dt.year) + (a.dt.month - b.dt.month)
 
 
-def create_small_df(size=100, limit=0, use_monthdiff=False):    
+def create_small_df(size=100, limit=0, use_monthdiff=False, random_seed=42):    
     SQL = """ 
         Select p.TransactionTS,
             p.AmountPaid,
@@ -70,12 +70,12 @@ def create_small_df(size=100, limit=0, use_monthdiff=False):
         df = df.set_index(['ContractId','TransactionTS'])
                   
     df = df.astype('float64')
-    df = reduce_df_size(df, size=size)
+    df = reduce_df_size(df, size=size, random_seed=random_seed)
     return df
 
-def reduce_df_size(df, size):
-        
-    sample_random_IDs = random.sample(df.index.get_level_values(0).unique().values.tolist(), k=size)
+def reduce_df_size(df, size, random_seed=42):
+    random.seed(a=random_seed)        
+    sample_random_IDs = random.sample(df.index.get_level_values(0).unique().values.tolist(), k=size,)
     
     small_df = df.loc[sample_random_IDs]   # see which IDs --> small_df.index.get_level_values(0).unique()
     return small_df

@@ -17,7 +17,9 @@ all_features, target_payment = create_features(df_for_model, target_monthdiff=18
 
 categorical_columns = [ 'Region',
                          'Town',
-                         'Occupation',]
+                         'Occupation',
+                         'Product',
+                         ]
 binary_columns = ['MainApplicantGender',]
 
 numerical_columns = ['Age', 'TotalContractValue',]
