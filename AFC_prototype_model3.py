@@ -36,6 +36,7 @@ from sklearn.model_selection import cross_val_predict
 from sklearn import linear_model
 import matplotlib.pyplot as plt
     
+from feature_importance import FeatureImportance
 
 
 """
@@ -134,8 +135,7 @@ def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=F
         print('time taken to fit model: {:.2f}'.format(time.process_time() - start))
 
         plot_error_histogram(pipe, model, X_test, y_test)
-        plot_actual_v_predicted(pipe, model, X_test, y_test)
-
+        plot_feature_importance(pipe)
 
     return (pipe, model, X, y), None
         
@@ -166,6 +166,30 @@ def plot_actual_v_predicted(pipe, model, X, y):
     plt.savefig('actual vs predicted for {}'.format(model))
 
 
+def plot_feature_importance(pipe):
+    feature_names = pipe.named_steps['columntransformer'].get_feature_names()
+    coefs = pipe[-1].coef_.flatten()
+    
+    # Zip coefficients and names together and make a DataFrame
+    zipped = zip(feature_names, coefs)
+    df = pd.DataFrame(zipped, columns=["feature", "value"])
+    # Sort the features by the absolute value of their coefficient
+    df["abs_value"] = df["value"].apply(lambda x: abs(x))
+    df["colors"] = df["value"].apply(lambda x: "green" if x > 0 else "red")
+    df = df.sort_values("abs_value", ascending=False)
+    
+    ## PLot
+    fig, ax = plt.subplots(1, 1, figsize=(12, 7))
+    sns.barplot(x="feature",
+                y="value",
+                data=df.head(20),
+               palette=df.head(20)["colors"])
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=90, fontsize=20)
+    ax.set_title("Top 20 Features", fontsize=25)
+    ax.set_ylabel("Coef", fontsize=22)
+    ax.set_xlabel("Feature Name", fontsize=22)
+
+
 if __name__ == "__main__":
     try:  #why isnt this working?
         print(small_df.head(1))
@@ -188,6 +212,4 @@ if __name__ == "__main__":
     ## Need to rework the target column if not using cumulative percentages
     (pipe, model,X, y), feature_df_on_error = feature_regression(df_for_model, models, calc_cumsum=True)
 
-    ## Does using cumulative payments enhance the model - probably not as this would introduce massive multicolinearity
-    #cum_df_for_model = create_percent_sdf(monthly_sdf, use_monthdiff=True, cumulative=True)
-    #(pipe, model, X, y), feature_df_on_error = feature_regression(cum_df_for_model, models, calc_cumsum=False)
+
