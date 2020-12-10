@@ -36,7 +36,7 @@ from sklearn.model_selection import cross_val_predict
 from sklearn import linear_model
 import matplotlib.pyplot as plt
     
-from feature_importance import FeatureImportance
+#from feature_importance import FeatureImportance
 
 
 """
@@ -147,7 +147,7 @@ def plot_error_histogram(pipe, model, X_test, y_test):
     ax = sns.histplot(pred_error)
     plt.title('Out of Sample Errors for {}'.format(model))
     plt.show()
-    plt.savefig('{} error histogram'.format(model))
+    plt.savefig('files\\{} error histogram'.format(model))
     
 
 def plot_actual_v_predicted(pipe, model, X, y):
@@ -163,7 +163,7 @@ def plot_actual_v_predicted(pipe, model, X, y):
     ax.set_ylabel('Predicted')
     plt.title('Actual vs Predicted for model {}'.format(model))
     plt.show()
-    plt.savefig('actual vs predicted for {}'.format(model))
+    plt.savefig('files\\actual vs predicted for {}'.format(model))
 
 
 def plot_feature_importance(pipe):

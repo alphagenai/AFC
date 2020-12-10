@@ -26,7 +26,8 @@ def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42):
         Select p.TransactionTS,
             p.AmountPaid,
             p.ContractId, 
-            c.RegistrationDate
+            c.RegistrationDate, 
+            p.Duration
         FROM afcproj.files_dupe.Payments_2020_11_17 p
         inner join afcproj.files_dupe.jan_19_cohort j
             on p.ContractId = j.ContractId   
@@ -41,7 +42,8 @@ def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42):
         Select a.CreatedAt,
             a.Amount,
             a.ContractId, 
-            c.RegistrationDate
+            c.RegistrationDate, 
+            0 as Duration
         FROM afcproj.files_dupe.Adjustments_2020_11_17 a
         inner join afcproj.files_dupe.jan_19_cohort j
             on a.ContractId = j.ContractId
@@ -51,13 +53,16 @@ def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42):
         WHERE a.BalanceChangeType = 'MANUAL'
             and (c.Product = 'X850'
             or c.Product = 'X850 Plus')
-    
             """
     
     #for contractID in cohort:
     if limit:
         SQL = SQL + " LIMIT {}".format(limit)
     df = pd.read_gbq(SQL,) #chunksize=10000) #chunksize doesnt work
+    
+    
+    ## HASNT BEEN TESTED YET
+    df['next_payment_date'] = df.shift(-1)['TransactionTS']
     
     if use_monthdiff:
         df['monthdiff'] = month_diff(df['TransactionTS'].dt.tz_localize(None), df['RegistrationDate']).clip(0,None)
@@ -71,7 +76,7 @@ def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42):
                   
     df = df.astype('float64', errors='ignore')  ## datetime columns cause errors
     df = reduce_df_size(df, size=size, random_seed=random_seed)
-    return df
+    return df.sort_index()
 
 def reduce_df_size(df, size, random_seed=42):
     random.seed(a=random_seed)        
@@ -115,23 +120,28 @@ def create_percent_sdf(input_df, cumulative=True, use_monthdiff=False):
     
     return return_df
 
-def convert_to_daily(small_df ):
-    sdf = small_df['AmountPaid'].unstack(0).fillna(0).sort_index()
+def convert_to_daily_pivot(small_df ):
+    sdf_pivot = small_df['AmountPaid'].unstack(0).fillna(0).sort_index()
     
-    daily_sdf = sdf.groupby(sdf.index.date).sum() #all payments in one day are grouped together
-    return daily_sdf
+    daily_sdf_pivot = sdf_pivot.groupby(sdf_pivot.index.date).sum() #all payments in one day are grouped together
+    return daily_sdf_pivot
 
 
 if __name__ == "__main__":
-    small_df = create_small_df()
-    daily_sdf = convert_to_daily(small_df)
-        
+    try:
+        print(small_df.head(1))
+    except NameError:
+        sdf = small_df = create_small_df(size=100)
+
+    daily_sdf_pivot = convert_to_daily_pivot(small_df)        
     daily_cum_sdf = daily_sdf.cumsum(axis=0) 
+
+    sdf = small_df['AmountPaid'].unstack(0).fillna(0).sort_index()
     monthly_sdf = sdf.groupby(pd.Grouper(freq='M')).sum()
     monthly_cum_sdf = monthly_sdf.cumsum(axis=0)
 
 
-    timeseries_length = (daily_sdf.index.max() - daily_sdf.index.min()).days
+    timeseries_length = (daily_sdf_pivot.index.max() - daily_sdf.index.min()).days
 
 
     AVERAGE_PAYMENT_FREQUENCY = timeseries_length / daily_sdf.astype(bool).sum(axis=0) 
@@ -144,7 +154,7 @@ if __name__ == "__main__":
     ax.set_xlabel("Transaction Date")
     ax.set_ylabel("Total Repayment Amount")
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000)+'k'))
-    plt.savefig(title)
+    plt.savefig('files\\{}'.format(title))
     
     
     ## Smoothed Payments
@@ -153,7 +163,7 @@ if __name__ == "__main__":
     ax.set_xlabel("Transaction Date")
     ax.set_ylabel("Total Repayment Amount")
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000)+'k'))
-    plt.savefig(title)
+    plt.savefig('files\\{}'.format(title))
     
     
     
@@ -164,7 +174,7 @@ if __name__ == "__main__":
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0%}'.format(x)))
     ax.set_xlabel("Transaction Date")
     ax.set_ylabel("files\\Total Repayment Amount % of Contract Value")
-    plt.savefig(title)
+    plt.savefig('files\\{}'.format(title))
     
     
     
@@ -176,7 +186,7 @@ if __name__ == "__main__":
     ax.set_xlabel("Transaction Date")
     ax.set_ylabel("Total Repayment Amount % of Contract Value")
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0%}'.format(x)))
-    plt.savefig('Monthly Cumulative percentage Payments for 100 Random Contracts in Jan 2019 Cohort')
+    plt.savefig('files\\Monthly Cumulative percentage Payments for 100 Random Contracts in Jan 2019 Cohort')
     
     
     ## HISTAGRAM OF daily % rePAYMENTS
@@ -191,7 +201,7 @@ if __name__ == "__main__":
     ax.set_xlabel('Payment %')
     ax.set_ylabel('Count')
     ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:.0%}'.format(x)))
-    plt.savefig('Daily Payment Histogram.png')
+    plt.savefig('files\\Daily Payment Histogram.png')
     
     
     
@@ -216,7 +226,7 @@ if __name__ == "__main__":
     ax.set_xlabel('Payment %')
     ax.set_ylabel('Count')
     ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:.0%}'.format(x)))
-    plt.savefig('Monthly Payment Histogram.png')
+    plt.savefig('files\\Monthly Payment Histogram.png')
     
     
     ### Monthly bar plot of 100 contracts monthly payments
