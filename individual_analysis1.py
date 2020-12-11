@@ -59,6 +59,10 @@ def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42):
     if limit:
         SQL = SQL + " LIMIT {}".format(limit)
     df = pd.read_gbq(SQL,) #chunksize=10000) #chunksize doesnt work
+    df = df.set_index(['ContractId'])
+
+    df = reduce_df_size(df, size=size, random_seed=random_seed)
+    df = df.astype('float64', errors='ignore')  ## datetime columns cause errors
     
     
     ## HASNT BEEN TESTED YET
@@ -66,21 +70,22 @@ def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42):
     
     if use_monthdiff:
         df['monthdiff'] = month_diff(df['TransactionTS'].dt.tz_localize(None), df['RegistrationDate']).clip(0,None)
-        df = df.groupby(['ContractId','monthdiff']).sum()
-    
+        df = df.groupby(['ContractId','monthdiff']).agg({
+            'TransactionTS':'count', 
+            'AmountPaid': 'sum',
+            'Duration':'sum',
+            })    
     else:
         
         df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:%S')
         
         df = df.set_index(['ContractId','TransactionTS'])
                   
-    df = df.astype('float64', errors='ignore')  ## datetime columns cause errors
-    df = reduce_df_size(df, size=size, random_seed=random_seed)
     return df.sort_index()
 
 def reduce_df_size(df, size, random_seed=42):
     random.seed(a=random_seed)        
-    sample_random_IDs = random.sample(df.index.get_level_values(0).unique().values.tolist(), k=size,)
+    sample_random_IDs = random.sample(df.index.unique().tolist(), k=size,)
     
     small_df = df.loc[sample_random_IDs]   # see which IDs --> small_df.index.get_level_values(0).unique()
     return small_df
