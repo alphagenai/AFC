@@ -152,6 +152,7 @@ def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=T
         print('time taken to fit model: {:.2f}'.format(time.process_time() - start))
 
         plot_error_histogram(pipe, model, X_test, y_test)
+        plot_actual_v_predicted(pipe, model, X, y)
         #plot_feature_importance(pipe)
 
     return (pipe, model, X, y), None
@@ -227,6 +228,7 @@ if __name__ == "__main__":
               ]
     
     ## Need to rework the target column if not using cumulative percentages
-    (pipe, model,X, y), feature_df_on_error = feature_regression(df_for_model, models,target_monthdiff=22, calc_cumsum=True)
+    (pipe, model,X, y), feature_df_on_error = feature_regression(
+        df_for_model, models,target_monthdiff=18, calc_cumsum=True)
 
 

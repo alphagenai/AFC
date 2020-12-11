@@ -88,9 +88,9 @@ def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42):
 
 def reduce_df_size(df, size, random_seed=42):
     random.seed(a=random_seed)        
-    sample_random_IDs = random.sample(df.index.unique().tolist(), k=size,)
+    #sample_random_IDs = random.sample(df.index.unique().tolist(), k=size,)
     
-    small_df = df.loc[sample_random_IDs]   # see which IDs --> small_df.index.get_level_values(0).unique()
+    small_df = df.loc[pd.read_pickle('1000 contractIds.pkl')]   # see which IDs --> small_df.index.get_level_values(0).unique()
     return small_df
 
 def create_percent_sdf(input_df, cumulative=True, use_monthdiff=False):

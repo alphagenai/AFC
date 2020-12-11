@@ -32,8 +32,9 @@ from individual_analysis1 import create_small_df
 
 
 
-small_df = create_small_df(size=100, use_monthdiff=True, random_seed=42)
-cum_small_df = small_df.groupby('ContractId').cumsum(axis=0)
+small_df2 = create_small_df(size=1000, use_monthdiff=True, random_seed=42)
+
+cum_small_df = small_df2.groupby('ContractId').cumsum(axis=0)
 #TO DO - sort out percentages
 final_paid = cum_small_df.loc(axis=0)[:,22]
 
