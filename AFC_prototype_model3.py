@@ -88,7 +88,7 @@ def create_features(input_df, target_monthdiff, calc_cumsum):
     return all_features, target_payment  
 
 
-def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=False):   ## input df is currently a montly cumulative percentage
+def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=True):   ## input df is currently a montly cumulative percentage
     
 
     all_features, target_payment = create_features(input_df, target_monthdiff, calc_cumsum)
@@ -99,18 +99,36 @@ def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=F
                             ]
     numerical_columns = ['Age', 'TotalContractValue',]
     binary_columns = ['MainApplicantGender',]
+
+ 
+    categorical_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(missing_values=None, strategy='constant', fill_value='UNKNOWN')),
+        ('encoder', OneHotEncoder(handle_unknown='ignore'))
+        ])
     
-    preprocessor = make_column_transformer(
-        (OneHotEncoder(handle_unknown='ignore'), categorical_columns), #one hot is all zero when unknown labels
-        (OneHotEncoder(drop='if_binary'), binary_columns), 
-    #    (LabelEncoder(), categorical_columns),  #gives error
-        remainder='passthrough'
-        )
-    
+    numerical_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='mean',)),
+        ])
+
+    binary_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='constant', fill_value='UNKNOWN')),
+        ('encoder', OneHotEncoder(drop='if_binary'), )
+        ])
+
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('cat', categorical_transformer, categorical_columns),
+            ('num', numerical_transformer, numerical_columns),
+            ('bin', binary_transformer, binary_columns),
+
+        ])    
+        
     
     
     X = all_features.sort_index()
     y = target_payment.sort_index()
+
     
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.33, random_state=42)
@@ -119,10 +137,9 @@ def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=F
     for model in models_list:
 
         pipe = make_pipeline(
-        preprocessor,
-        SimpleImputer(strategy='mean'),
-        model,
-        )
+            preprocessor,
+            model,
+            )
     
 
 
@@ -131,11 +148,11 @@ def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=F
             pipe.fit(X_train,y_train)
         except Exception as e:
             print(e)
-            return pipe, all_features   # for debugging
+            return (pipe, model, X, y), all_features   # for debugging
         print('time taken to fit model: {:.2f}'.format(time.process_time() - start))
 
         plot_error_histogram(pipe, model, X_test, y_test)
-        plot_feature_importance(pipe)
+        #plot_feature_importance(pipe)
 
     return (pipe, model, X, y), None
         
@@ -167,6 +184,7 @@ def plot_actual_v_predicted(pipe, model, X, y):
 
 
 def plot_feature_importance(pipe):
+    raise NotImplementedError('No longer works because changed from make_column_transformer to preprocessor')
     feature_names = pipe.named_steps['columntransformer'].get_feature_names()
     coefs = pipe[-1].coef_.flatten()
     
@@ -202,7 +220,6 @@ if __name__ == "__main__":
     df_for_model = create_percent_sdf(monthly_sdf, use_monthdiff=True, cumulative=False)
     
     
-    
     models = [RandomForestRegressor(),
               LinearRegression(),
               #SGDRegressor(), # not working
@@ -210,6 +227,6 @@ if __name__ == "__main__":
               ]
     
     ## Need to rework the target column if not using cumulative percentages
-    (pipe, model,X, y), feature_df_on_error = feature_regression(df_for_model, models, calc_cumsum=True)
+    (pipe, model,X, y), feature_df_on_error = feature_regression(df_for_model, models,target_monthdiff=22, calc_cumsum=True)
 
 

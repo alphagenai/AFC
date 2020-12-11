@@ -54,18 +54,21 @@ def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42):
             and (c.Product = 'X850'
             or c.Product = 'X850 Plus')
             """
+    try:
+        df = pd.read_pickle('small_df.pkl')
+    except:
+        #for contractID in cohort:
+        if limit:
+            SQL = SQL + " LIMIT {}".format(limit)
+        df = pd.read_gbq(SQL,) #chunksize=10000) #chunksize doesnt work
+        df = df.set_index(['ContractId'])
     
-    #for contractID in cohort:
-    if limit:
-        SQL = SQL + " LIMIT {}".format(limit)
-    df = pd.read_gbq(SQL,) #chunksize=10000) #chunksize doesnt work
-    df = df.set_index(['ContractId'])
-
-    df = reduce_df_size(df, size=size, random_seed=random_seed)
-    df = df.astype('float64', errors='ignore')  ## datetime columns cause errors
+        df = reduce_df_size(df, size=size, random_seed=random_seed)
+        df = df.astype('float64', errors='ignore')  ## datetime columns cause errors
+    
+        df.to_pickle('small_df.pkl')
     
     
-    ## HASNT BEEN TESTED YET
     df['next_payment_date'] = df.shift(-1)['TransactionTS']
     
     if use_monthdiff:
