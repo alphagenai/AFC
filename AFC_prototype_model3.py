@@ -138,6 +138,7 @@ def feature_regression(input_df, models_list, target_monthdiff=18, calc_cumsum=T
 
         pipe = make_pipeline(
             preprocessor,
+             ('dbg', Debug()),
             model,
             )
     

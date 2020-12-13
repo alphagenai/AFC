@@ -17,57 +17,58 @@ import matplotlib as mpl
 import matplotlib.ticker as ticker
 
 
+PAYMENT_DATA_SQL = """ 
+    Select p.TransactionTS,
+        p.AmountPaid,
+        p.ContractId, 
+        c.RegistrationDate, 
+        p.Duration
+    FROM afcproj.files_dupe.Payments_2020_11_17 p
+    inner join afcproj.files_dupe.{0}_cohort j
+        on p.ContractId = j.ContractId   
+    inner join afcproj.files_dupe.Contracts_20201117 c
+        on c.ContractId = j.ContractId
+    WHERE p.paymentStatusTypeEntity != 'REFUSED'
+        and
+        p.PaymentResultTypeEntity != 'PAYMENT_FREE_CREDIT'
+        and (c.Product = 'X850'
+        or c.Product = 'X850 Plus')
+    UNION ALL
+    Select a.CreatedAt,
+        a.Amount,
+        a.ContractId, 
+        c.RegistrationDate, 
+        0 as Duration
+    FROM afcproj.files_dupe.Adjustments_2020_11_17 a
+    inner join afcproj.files_dupe.{0}_cohort j
+        on a.ContractId = j.ContractId
+    inner join afcproj.files_dupe.Contracts_20201117 c
+        on c.ContractId = j.ContractId
+
+    WHERE a.BalanceChangeType = 'MANUAL'
+        and (c.Product = 'X850'
+        or c.Product = 'X850 Plus')
+        """
+
 def month_diff(a, b):
     return 12 * (a.dt.year - b.dt.year) + (a.dt.month - b.dt.month)
 
 
-def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42):    
-    SQL = """ 
-        Select p.TransactionTS,
-            p.AmountPaid,
-            p.ContractId, 
-            c.RegistrationDate, 
-            p.Duration
-        FROM afcproj.files_dupe.Payments_2020_11_17 p
-        inner join afcproj.files_dupe.jan_19_cohort j
-            on p.ContractId = j.ContractId   
-        inner join afcproj.files_dupe.Contracts_20201117 c
-            on c.ContractId = j.ContractId
-        WHERE p.paymentStatusTypeEntity != 'REFUSED'
-            and
-            p.PaymentResultTypeEntity != 'PAYMENT_FREE_CREDIT'
-            and (c.Product = 'X850'
-            or c.Product = 'X850 Plus')
-        UNION ALL
-        Select a.CreatedAt,
-            a.Amount,
-            a.ContractId, 
-            c.RegistrationDate, 
-            0 as Duration
-        FROM afcproj.files_dupe.Adjustments_2020_11_17 a
-        inner join afcproj.files_dupe.jan_19_cohort j
-            on a.ContractId = j.ContractId
-        inner join afcproj.files_dupe.Contracts_20201117 c
-            on c.ContractId = j.ContractId
-    
-        WHERE a.BalanceChangeType = 'MANUAL'
-            and (c.Product = 'X850'
-            or c.Product = 'X850 Plus')
-            """
+def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42, cohort='jan_19'):
+
     try:
-        df = pd.read_pickle('small_df.pkl')
+        df = pd.read_pickle('files\\small_df_{}_{}.pkl'.format(size, cohort))
     except:
-        #for contractID in cohort:
+        sql = PAYMENT_DATA_SQL.format(cohort)
         if limit:
-            SQL = SQL + " LIMIT {}".format(limit)
-        df = pd.read_gbq(SQL,) #chunksize=10000) #chunksize doesnt work
+            sql = sql + " LIMIT {}".format(limit)
+        df = pd.read_gbq(sql,) #chunksize=10000) #chunksize doesnt work
         df = df.set_index(['ContractId'])
     
         df = reduce_df_size(df, size=size, random_seed=random_seed)
         df = df.astype('float64', errors='ignore')  ## datetime columns cause errors
     
-        df.to_pickle('small_df.pkl')
-    
+        df.to_pickle('files\\small_df_{}_{}.pkl'.format(size, cohort))
     
     df['next_payment_date'] = df.shift(-1)['TransactionTS']
     
@@ -82,15 +83,16 @@ def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42):
         
         df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:%S')
         
-        df = df.set_index(['ContractId','TransactionTS'])
+        df = df.groupby(['ContractId','TransactionTS']).max() # by using max we are assuming all entries are unique
                   
     return df.sort_index()
 
 def reduce_df_size(df, size, random_seed=42):
     random.seed(a=random_seed)        
-    #sample_random_IDs = random.sample(df.index.unique().tolist(), k=size,)
+    sample_random_IDs = random.sample(df.index.unique().tolist(), k=size,)
     
-    small_df = df.loc[pd.read_pickle('1000 contractIds.pkl')]   # see which IDs --> small_df.index.get_level_values(0).unique()
+    small_df = df.loc[sample_random_IDs]   # see which IDs --> small_df.index.get_level_values(0).unique()
+    #small_df = df.loc[pd.read_pickle('files\\1000 contractIds.pkl')]   # see which IDs --> small_df.index.get_level_values(0).unique()
     return small_df
 
 def create_percent_sdf(input_df, cumulative=True, use_monthdiff=False):
@@ -139,10 +141,10 @@ if __name__ == "__main__":
     try:
         print(small_df.head(1))
     except NameError:
-        sdf = small_df = create_small_df(size=100)
+        sdf = small_df = create_small_df(size=1000, cohort='dec_17')
 
     daily_sdf_pivot = convert_to_daily_pivot(small_df)        
-    daily_cum_sdf = daily_sdf.cumsum(axis=0) 
+    daily_cum_sdf = daily_sdf_pivot.cumsum(axis=0) 
 
     sdf = small_df['AmountPaid'].unstack(0).fillna(0).sort_index()
     monthly_sdf = sdf.groupby(pd.Grouper(freq='M')).sum()
@@ -157,13 +159,19 @@ if __name__ == "__main__":
     
     ###### Plotting
     ## Daily Payments
-    title = "Cumulative Payments for 100 Random X850 Contracts in Jan 2019 Cohort"
-    ax = daily_cum_sdf.plot(figsize=(20,8), legend=False, title=title)
-    ax.set_xlabel("Transaction Date")
-    ax.set_ylabel("Total Repayment Amount")
-    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000)+'k'))
-    plt.savefig('files\\{}'.format(title))
     
+    def plot_daily_payments(df, batch_size=10):
+        for i in range(10):
+            title = "Cumulative Payments for {} Random X850 Contracts in Jan 2019 Cohort".format(batch_size)
+            ax = df[i*batch_size:(i+1)*batch_size].plot(figsize=(20,8), legend=False, title=title)
+            ax.set_xlabel("Transaction Date")
+            ax.set_ylabel("Total Repayment Amount")
+            ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000)+'k'))
+            plt.savefig('files\\{0}_{1}'.format(title, i))
+    plot_daily_payments(daily_cum_sdf, batch_size=10)
+
+
+    exit()
     
     ## Smoothed Payments
     title = "Smoothed Cumulative Payments for 100 Random X850 Contracts in Jan 2019 Cohort"

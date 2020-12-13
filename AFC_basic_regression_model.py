@@ -278,7 +278,7 @@ if __name__ == "__main__":
     except NameError:
         print("SMALL_DF NOT FOUND")
         small_df = create_small_df(size=1000, use_monthdiff=True, random_seed=42)
-        
+        small_df.index.get_level_values(0).unique().to_series().to_pickle('files\\1000 contractIds.pkl')
     monthly_sdf = small_df['AmountPaid'].unstack('ContractId').fillna(0).sort_index()
 
     ##using monthdiff appears to make the model worse - WHY???
