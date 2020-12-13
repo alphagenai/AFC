@@ -95,7 +95,7 @@ def reduce_df_size(df, size, random_seed=42):
     #small_df = df.loc[pd.read_pickle('files\\1000 contractIds.pkl')]   # see which IDs --> small_df.index.get_level_values(0).unique()
     return small_df
 
-def create_percent_sdf(input_df, cumulative=True, use_monthdiff=False):
+def create_percent_sdf(input_df, cumulative=True, use_monthdiff=False, cohort='jan_19'):
     
     
     ### Get Contract info
@@ -105,9 +105,9 @@ def create_percent_sdf(input_df, cumulative=True, use_monthdiff=False):
             Price + AdditionalFee as TotalContractValue,     
             --c.RegistrationDate 
         FROM `afcproj.files_dupe.Contracts_20201117` c
-        join `afcproj.files_dupe.jan_19_cohort` j
+        join `afcproj.files_dupe.{}_cohort` j
             on c.ContractId = j.ContractId
-        """
+        """.format(cohort)
     cdf = pd.read_gbq(SQL,index_col='ContractId').astype('float64')
     
     
@@ -136,6 +136,19 @@ def convert_to_daily_pivot(small_df ):
     daily_sdf_pivot = sdf_pivot.groupby(sdf_pivot.index.date).sum() #all payments in one day are grouped together
     return daily_sdf_pivot
 
+def plot_daily_payments(df, batch_size=10, cohort_name='Jan 2019', y_formatter=None):
+    num_pieces = int(len(df)/batch_size)
+    for i in range(max(num_pieces,10)):
+        title = "Cumulative Payments for {} Random X850 Contracts in {} Cohort".format(batch_size, cohort_name)
+        columns = df.columns[i*batch_size:(i+1)*batch_size]
+        ax = df[columns].plot(figsize=(20,8), legend=False, title=title)
+        ax.set_xlabel("Transaction Date")
+        ax.set_ylabel("Total Repayment Amount")
+        ax.yaxis.set_major_formatter(y_formatter)
+        plt.savefig('files\\{0}_{1}'.format(title, i))
+        plt.show()
+
+
 
 if __name__ == "__main__":
     try:
@@ -151,7 +164,7 @@ if __name__ == "__main__":
     monthly_cum_sdf = monthly_sdf.cumsum(axis=0)
 
 
-    timeseries_length = (daily_sdf_pivot.index.max() - daily_sdf.index.min()).days
+    #timeseries_length = (daily_sdf_pivot.index.max() - daily_sdf_pivot.index.min()).days
 
 
     AVERAGE_PAYMENT_FREQUENCY = timeseries_length / daily_sdf.astype(bool).sum(axis=0) 
@@ -159,20 +172,10 @@ if __name__ == "__main__":
     
     ###### Plotting
     ## Daily Payments
-    
-    def plot_daily_payments(df, batch_size=10):
-        for i in range(10):
-            title = "Cumulative Payments for {} Random X850 Contracts in Jan 2019 Cohort".format(batch_size)
-            ax = df[i*batch_size:(i+1)*batch_size].plot(figsize=(20,8), legend=False, title=title)
-            ax.set_xlabel("Transaction Date")
-            ax.set_ylabel("Total Repayment Amount")
-            ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000)+'k'))
-            plt.savefig('files\\{0}_{1}'.format(title, i))
-    plot_daily_payments(daily_cum_sdf, batch_size=10)
+    plot_daily_payments(daily_cum_sdf, batch_size=10, cohort_name='Dec 17', 
+                        y_formatter=ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x/1000)+'k')
+                        )
 
-
-    exit()
-    
     ## Smoothed Payments
     title = "Smoothed Cumulative Payments for 100 Random X850 Contracts in Jan 2019 Cohort"
     ax = daily_cum_sdf.rolling(window=30).mean().plot(figsize=(20,8), legend=False, title=title)
@@ -184,13 +187,16 @@ if __name__ == "__main__":
     
     
     ## Percentage Payments
-    cumulative_percent_sdf = create_cumulative_percent_sdf(daily_sdf)
-    title = "Cumulative % Payments for 100 Random X850 Contracts in Jan 2019 Cohort"
-    ax = cumulative_percent_sdf.plot(figsize=(20,8), legend=False, title=title)
-    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '{:,.0%}'.format(x)))
-    ax.set_xlabel("Transaction Date")
-    ax.set_ylabel("files\\Total Repayment Amount % of Contract Value")
-    plt.savefig('files\\{}'.format(title))
+    cumulative_percent_sdf = create_percent_sdf(daily_sdf_pivot, cumulative=True, cohort='dec_17')
+    # title = "Cumulative % Payments for 100 Random X850 Contracts in Jan 2019 Cohort"
+    # ax = cumulative_percent_sdf.plot(figsize=(20,8), legend=False, title=title)
+    # ax.yaxis.set_major_formatter()
+    # ax.set_xlabel("Transaction Date")
+    # ax.set_ylabel("files\\Total Repayment Amount % of Contract Value")
+    # plt.savefig('files\\{}'.format(title))
+    plot_daily_payments(cumulative_percent_sdf, batch_size=10, cohort_name='Dec 17',
+                        y_formatter=ticker.FuncFormatter(lambda x, pos: '{:,.0%}'.format(x))
+                        )
     
     
     
