@@ -12,7 +12,7 @@ from matplotlib import pyplot as plt
 
 from individual_analysis1 import create_small_df, create_percent_sdf, convert_to_daily_pivot
 
-small_df = create_small_df(size=10000, cohort='dec_17')
+small_df = create_small_df(size=1000, cohort='dec_17')
 daily_sdf_pivot = convert_to_daily_pivot(small_df)     
 cumulative_percent_sdf = create_percent_sdf(daily_sdf_pivot, cumulative=True, cohort='dec_17')
 cumulative_amount_sdf = daily_sdf_pivot.cumsum(axis=0)
@@ -21,10 +21,11 @@ cumulative_amount_sdf.index = pd.to_datetime(cumulative_amount_sdf.index,format=
 def pick_interesting_timepoints(cumulative_df):
     at_month_6 = cumulative_df.loc['2018-05-30']
     at_month_18 = cumulative_df.loc['2019-05-31']
+    at_month_24 = cumulative_df.loc['2019-11-30']
     last_chance = cumulative_df.loc['2020-11-17']
-    return (at_month_6, at_month_18, last_chance)
+    return (at_month_6, at_month_18, at_month_24, last_chance)
 
-at_month_6, at_month_18, last_chance = pick_interesting_timepoints(cumulative_amount_sdf)
+at_month_6, at_month_18, at_month_24, last_chance = pick_interesting_timepoints(cumulative_percent_sdf)
 
 
 ## This guy is interesting:
@@ -35,16 +36,29 @@ fig, ax = plt.subplots()
 sns.histplot(at_month_6, bins=100)
 title = '6 month payment histogram'
 plt.title(title)
+plt.savefig(title)
 
 fig, ax = plt.subplots()
 sns.histplot(at_month_18, bins=100)
 title = '18 month payment histogram'
 plt.title(title)
+plt.savefig(title)
+
+fig, ax = plt.subplots()
+sns.histplot(at_month_24, bins=100)
+title = '24 month payment histogram'
+plt.title(title)
+plt.savefig(title)
 
 fig, ax = plt.subplots()
 sns.histplot(last_chance, bins=100)
 title = '3 year payment histogram'
 plt.title(title)
+plt.savefig(title)
+
+
+
+
 plt.show()
 
 
@@ -123,13 +137,13 @@ for cat_name, cat in categories.items():
     plt.savefig('files\\'+title)
 plt.show() 
 
-   
+
 for cat_name, cat in categories.items():
 
     ## histogram at 6 months
     fig, ax = plt.subplots()
-    sns.histplot(at_month_6[cat.index[cat]], bins=100, legend=False)
-    title = 'Histogram of Cumulative Payments at 6 months {}'.format(cat_name)
+    sns.histplot(last_chance[cat.index[cat]], bins=20, legend=False)
+    title = 'Histogram of Cumulative Payments at 3 Years {}'.format(cat_name)
     plt.title(title)
     plt.savefig('files\\'+title)
     
@@ -138,6 +152,25 @@ for cat_name, cat in categories.items():
 plt.show()
 
 
+
+
+## cumulative % payment HISTOGRAM AT 18,24,36 Months
+
+fig, ax = plt.subplots()
+sns.histplot(at_month_6)
+plt.title('6 months')
+
+fig, ax = plt.subplots()
+sns.histplot(at_month_18)
+plt.title('18 months')
+
+fig, ax = plt.subplots()
+sns.histplot(at_month_24)
+plt.title('24 months')
+
+fig, ax = plt.subplots()
+sns.histplot(last_chance)
+plt.title('3 Years')
 
 
 ### 
