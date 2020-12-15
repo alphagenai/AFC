@@ -39,7 +39,7 @@ categories = {'Paid off on time':paid_off_on_time,
               }
 
 run_sum = 0
-for cat in categories:
+for cat_name, cat in categories.items():
     print(cat.sum())
     run_sum += cat.sum()
 ## should add to 1000!
@@ -54,9 +54,20 @@ percent_sdf = create_percent_sdf(daily_sdf_pivot, cumulative=False, cohort='dec_
 for cat_name, cat in categories.items():
     mean_daily_repayment = percent_sdf[cat.index[cat]].mean(axis=1)
     full_cumulative_repayment = cumulative_percent_sdf[cat.index[cat]]
-
+    
+    # daily average payments across the group
     fig, ax = plt.subplots()
     mean_daily_repayment.plot(title=cat_name)
+    
+    ## what do the cumulative payhments look like?
     fig, ax = plt.subplots()
     full_cumulative_repayment.plot(title=cat_name)
+    
+    ##histograms of daily payments
+    fig, ax = plt.subplots()
+    sns.histplot(percent_sdf[cat.index[cat]], bins=100)
+    plt.xscale('log')
+    plt.title('')
+    plt.savefig('')
     plt.show()
+    ##what are the total number of token bought for each group?
