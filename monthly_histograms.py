@@ -26,11 +26,15 @@ monthly_percent_pivot = daily_percent_pivot.groupby(pd.Grouper(freq='M')).sum()
 
 d = pd.date_range(start='2017-12-01', end='2020-11-30', freq='M')
 
-for month in d[18:20]:
+
+paid_off_on_time, paid_off_eventually, gt_80, bad, very_bad, default = create_boolean_categories(cumulative_percent_sdf)
+
+
+for month in d[18:36]:
     fig,ax = plt.subplots()
-    sns.histplot(monthly_sdf_pivot.loc[d], bins=100, legend=False)
-    title = 'Histogram for payments in {} {}'.format(month.month, month.year)
+    sns.histplot(data=monthly_percent_pivot.loc[month][~(paid_off_on_time | paid_off_eventually)], bins=100, legend=False)
+    title = 'Histogram for payments in {} {} (not fully repaid)'.format(month.month, month.year)
     plt.title(title)
     plt.savefig('files\\{}'.format(title))
     plt.close()
-    
+ 

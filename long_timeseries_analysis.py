@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 from individual_analysis1 import create_small_df, create_percent_sdf, convert_to_daily_pivot
 
 small_df = create_small_df(size=1000, cohort='dec_17')
-daily_sdf_pivot = convert_to_daily_pivot(small_df)     
+daily_sdf_pivot = convert_to_daily_pivot(small_df)
 cumulative_percent_sdf = create_percent_sdf(daily_sdf_pivot, cumulative=True, cohort='dec_17')
 cumulative_amount_sdf = daily_sdf_pivot.cumsum(axis=0)
 cumulative_amount_sdf.index = pd.to_datetime(cumulative_amount_sdf.index,format='%Y/%m/%d %H:%M:%S')
@@ -25,55 +25,51 @@ def pick_interesting_timepoints(cumulative_df):
     last_chance = cumulative_df.loc['2020-11-17']
     return (at_month_6, at_month_18, at_month_24, last_chance)
 
-at_month_6, at_month_18, at_month_24, last_chance = pick_interesting_timepoints(cumulative_percent_sdf)
 
 
 ## This guy is interesting:
 # cumulative_percent_sdf['1351574'].plot()
 
-
-fig, ax = plt.subplots()
-sns.histplot(at_month_6, bins=100)
-title = '6 month payment histogram'
-plt.title(title)
-plt.savefig(title)
-
-fig, ax = plt.subplots()
-sns.histplot(at_month_18, bins=100)
-title = '18 month payment histogram'
-plt.title(title)
-plt.savefig(title)
-
-fig, ax = plt.subplots()
-sns.histplot(at_month_24, bins=100)
-title = '24 month payment histogram'
-plt.title(title)
-plt.savefig(title)
-
-fig, ax = plt.subplots()
-sns.histplot(last_chance, bins=100)
-title = '3 year payment histogram'
-plt.title(title)
-plt.savefig(title)
-
-
-
-
-plt.show()
-
-
-
-paid_off_on_time = (at_month_18 >= 0.98)
-paid_off_eventually = (at_month_18 < 0.98) & (last_chance >= 0.98)
-not_paid_ok = (last_chance > 0.8) & (last_chance < 0.980)
-bad = (last_chance < 0.8) & (last_chance >= 0.5)
-very_bad = (last_chance < 0.5) & (last_chance >= 0.2) 
-default = (last_chance < 0.2)  
-
+def payment_histograms():
+    fig, ax = plt.subplots()
+    sns.histplot(at_month_6, bins=100)
+    title = '6 month payment histogram'
+    plt.title(title)
+    plt.savefig(title)
+    
+    fig, ax = plt.subplots()
+    sns.histplot(at_month_18, bins=100)
+    title = '18 month payment histogram'
+    plt.title(title)
+    plt.savefig(title)
+    
+    fig, ax = plt.subplots()
+    sns.histplot(at_month_24, bins=100)
+    title = '24 month payment histogram'
+    plt.title(title)
+    plt.savefig(title)
+    
+    fig, ax = plt.subplots()
+    sns.histplot(last_chance, bins=100)
+    title = '3 year payment histogram'
+    plt.title(title)
+    plt.savefig(title)
+        
+    plt.show()
+    
+def create_boolean_categories(cumulative_percent_sdf):
+    at_month_6, at_month_18, at_month_24, last_chance = pick_interesting_timepoints(cumulative_percent_sdf)
+    paid_off_on_time = (at_month_18 >= 0.98)
+    paid_off_eventually = (at_month_18 < 0.98) & (last_chance >= 0.98)
+    gt_80 = (last_chance > 0.8) & (last_chance < 0.980)
+    bad = (last_chance < 0.8) & (last_chance >= 0.5)
+    very_bad = (last_chance < 0.5) & (last_chance >= 0.2) 
+    default = (last_chance < 0.2)  
+    return paid_off_on_time, paid_off_eventually, gt_80, bad, very_bad, default
 
 categories = {'Paid off on time':paid_off_on_time,
               'Paid off after 18 months':paid_off_eventually ,
-              'Almost fully repaid':not_paid_ok ,
+              'Almost fully repaid':gt_80 ,
               'Less than 80% paid':bad ,
               'Less than 50% paid':very_bad ,
               'Less than 20% paid':default,
@@ -97,7 +93,7 @@ percent_sdf = create_percent_sdf(daily_sdf_pivot, cumulative=False, cohort='dec_
 
 
 fig, ax = plt.subplots()
-sns.histplot(last_chance[not_paid_ok | bad | very_bad | default], bins=100)
+sns.histplot(last_chance[gt_80 | bad | very_bad | default], bins=100)
 plt.show()
 
 
@@ -175,13 +171,3 @@ plt.title('3 Years')
 
 ### 
 
-# Monthly analysis
-
-daily_sdf_pivot.index = pd.to_datetime(daily_sdf_pivot.index,format='%Y/%m/%d %H:%M:%S')
-monthly_sdf_pivot = daily_sdf_pivot.groupby(pd.Grouper(freq='M')).sum()
-
-for month in d[0:12]:
-    fig,ax = plt.subplots()
-    sns.histplot(monthly_sdf_pivot.loc[d], bins=100, legend=False)
-    plt.xlabel(month)
-    
