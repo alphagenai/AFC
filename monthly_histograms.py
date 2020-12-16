@@ -13,6 +13,7 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 
 from individual_analysis1 import create_small_df, create_percent_sdf, convert_to_daily_pivot
+from long_timeseries_analysis import create_boolean_categories
 
 small_df = create_small_df(size=1000, cohort='dec_17')
 daily_sdf_pivot = convert_to_daily_pivot(small_df)
@@ -30,11 +31,13 @@ d = pd.date_range(start='2017-12-01', end='2020-11-30', freq='M')
 paid_off_on_time, paid_off_eventually, gt_80, bad, very_bad, default = create_boolean_categories(cumulative_percent_sdf)
 
 
-for month in d[18:36]:
+for month in d[0:18]:
     fig,ax = plt.subplots()
     sns.histplot(data=monthly_percent_pivot.loc[month][~(paid_off_on_time | paid_off_eventually)], bins=100, legend=False)
-    title = 'Histogram for payments in {} {} (not fully repaid)'.format(month.month, month.year)
+    title = 'Histogram for Payments in {} {} (not fully repaid)'.format(month.month_name(), month.year)
     plt.title(title)
+    plt.xlabel('Percentage Paid')
+
     plt.savefig('files\\{}'.format(title))
     plt.close()
  
