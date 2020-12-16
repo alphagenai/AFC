@@ -108,3 +108,41 @@ print(model.summary())
 # train['ds'] = train.index.values
 # m = Prophet()
 # m.fit(train)
+
+
+### XGBoost
+
+one_contract = one_contract.to_frame()
+one_contract.index.rename('ds', inplace=True)
+one_contract.rename(columns={one_contract.columns[0]:'y'}, inplace=True)
+
+
+
+def featurize(t):
+    X = pd.DataFrame()
+
+    X['day'] = t.index.day
+    X['month'] = t.index.month
+    X['quarter'] = t.index.quarter
+    X['dayofweek'] = t.index.dayofweek
+    X['dayofyear'] = t.index.dayofyear
+    X['weekofyear'] = t.index.weekofyear
+    y = t.y
+    return X, y
+
+
+dataset = one_contract
+featurize(dataset)[0].head()
+
+X_train, y_train = featurize(
+    dataset.loc[dataset.index < pd.to_datetime(pred_start_date)])
+X_test, y_test = featurize(
+    dataset.loc[dataset.index >= pd.to_datetime(pred_start_date)])
+
+scaler = StandardScaler()
+scaler.fit(X_train)
+    
+scaled_train = scaler.transform(X_train)
+scaled_test = scaler.transform(X_test)
+
+XGBOOST_model = XGBRegressor(n_estimators=7)
