@@ -15,7 +15,10 @@ import matplotlib.dates as mdates
 import seaborn as sns
 import matplotlib as mpl
 import matplotlib.ticker as ticker
+import time
+import sqlite3
 
+from sqlite_settings import DB_PATH
 
 PAYMENT_DATA_SQL = """ 
     Select p.TransactionTS,
@@ -54,7 +57,7 @@ def month_diff(a, b):
     return 12 * (a.dt.year - b.dt.year) + (a.dt.month - b.dt.month)
 
 
-def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42, cohort='jan_19'):
+def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42, cohort='jan_19', use_bigquery=True):
 
     try:
         df = pd.read_pickle('files\\small_df_{}_{}.pkl'.format(size, cohort))
@@ -62,7 +65,20 @@ def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42, 
         sql = PAYMENT_DATA_SQL.format(cohort)
         if limit:
             sql = sql + " LIMIT {}".format(limit)
-        df = pd.read_gbq(sql,) #chunksize=10000) #chunksize doesnt work
+        if use_bigquery:
+            print("Reading from bigquery")
+            tic = time.perf_counter()
+            df = pd.read_gbq(sql,) #chunksize=10000) #chunksize doesnt work
+            toc = time.perf_counter()
+            print(f"Time taken to read the database: {toc - tic:0.4f} seconds")
+        else:
+            print("Reading from sqlite")
+            tic = time.perf_counter()
+            conn = sqlite3.connect(DB_PATH)
+            df = pd.read_gbq(sql,con=conn)
+            toc = time.perf_counter()
+            print(f"Time taken to read the database: {toc - tic:0.4f} seconds")
+
         df = df.set_index(['ContractId'])
     
         df = reduce_df_size(df, size=size, random_seed=random_seed)
