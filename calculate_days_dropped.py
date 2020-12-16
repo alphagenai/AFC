@@ -20,7 +20,7 @@ each classification can have different prior for bayes
 """
 
 
-df = pd.read_pickle('files\\small_df.pkl')
+df = pd.read_pickle('files\\small_df_1000_dec_17.pkl')
 
 df = df.groupby(['ContractId', 'TransactionTS']).sum()
 
@@ -71,7 +71,7 @@ contract_sql = """
             c.Product,
         Price + AdditionalFee as TotalContractValue,     
     FROM `afcproj.files_dupe.Contracts_20201117` c
-    join `afcproj.files_dupe.jan_19_cohort` j
+    join `afcproj.files_dupe.dec_17_cohort` j
         on c.ContractId = j.ContractId
         """
 cfdf = pd.read_gbq(contract_sql, index_col='ContractId', dialect='standard')  #.astype('float64')
@@ -95,7 +95,9 @@ all_features = pd.merge(all_features,
 all_features['percent_paid'] = all_features['AmountPaid_total']/all_features['TotalContractValue']
 fig, ax = plt.subplots()
 plt.scatter(all_features['days_dropped_6m'], all_features['percent_paid'])
-
+plt.xlabel('Total Number of Days Without Electricity at 6 Months')
+plt.ylabel('Total Percentage of Contract Value Paid at 6 Months')
+plt.savefig('files\\scatter days dropped vs amount paid')
 
 fig, ax = plt.subplots()
 plt.scatter(all_features['AmountPaid_6m'], all_features['percent_paid'])
