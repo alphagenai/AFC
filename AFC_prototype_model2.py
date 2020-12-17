@@ -6,7 +6,7 @@ Created on Fri Dec  4 14:42:18 2020
 """
 
 #import pmdarima as pm
-from statsmodels.tsa.seasonal import seasonal_decompose
+#from statsmodels.tsa.seasonal import seasonal_decompose
 from sklearn.model_selection import TimeSeriesSplit
 import pandas as pd
 import numpy as np
@@ -20,16 +20,17 @@ import matplotlib.dates as mdates
 import datetime as dt
 
 #from xgboost import XGBRegressor
+from sklearn.ensemble import GradientBoostingRegressor as XGBRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.preprocessing import OrdinalEncoder
 from sklearn.svm import SVR
 from sklearn.model_selection import train_test_split
-from statsmodels.tsa.statespace.sarimax import SARIMAX
-from statsmodels.tsa.arima.model import ARIMA
+#from statsmodels.tsa.statespace.sarimax import SARIMAX
+#from statsmodels.tsa.arima.model import ARIMA
 from sklearn.preprocessing import StandardScaler
-from fbprophet import Prophet
-from fbprophet.plot import plot_plotly, add_changepoints_to_plot
+#from fbprophet import Prophet
+#from fbprophet.plot import plot_plotly, add_changepoints_to_plot
 #from keras.models import Sequential
 #from keras.layers import Dense
 #from keras.optimizers import Adam
@@ -112,9 +113,6 @@ print(model.summary())
 
 ### XGBoost
 
-one_contract = one_contract.to_frame()
-one_contract.index.rename('ds', inplace=True)
-one_contract.rename(columns={one_contract.columns[0]:'y'}, inplace=True)
 
 
 
@@ -131,18 +129,47 @@ def featurize(t):
     return X, y
 
 
-dataset = one_contract
-featurize(dataset)[0].head()
+for contractid in monthly_sdf.columns:
+    one_contract = monthly_sdf[contractid]
 
-X_train, y_train = featurize(
-    dataset.loc[dataset.index < pd.to_datetime(pred_start_date)])
-X_test, y_test = featurize(
-    dataset.loc[dataset.index >= pd.to_datetime(pred_start_date)])
+    one_contract = one_contract.to_frame()
+    one_contract.index.rename('ds', inplace=True)
+    one_contract.rename(columns={one_contract.columns[0]:'y'}, inplace=True)
 
-scaler = StandardScaler()
-scaler.fit(X_train)
+
+    dataset = one_contract
+    featurize(dataset)[0].head()
     
-scaled_train = scaler.transform(X_train)
-scaled_test = scaler.transform(X_test)
-
-XGBOOST_model = XGBRegressor(n_estimators=7)
+    X_train, y_train = featurize(
+        dataset.loc[dataset.index < pd.to_datetime(pred_start_date)])
+    X_test, y_test = featurize(
+        dataset.loc[dataset.index >= pd.to_datetime(pred_start_date)])
+    
+    scaler = StandardScaler()
+    scaler.fit(X_train)
+        
+    scaled_train = scaler.transform(X_train)
+    scaled_test = scaler.transform(X_test)
+    
+    XGBOOST_model = XGBRegressor(n_estimators=7)
+    
+    XGBOOST_model.fit(scaled_train, y_train,)
+    #                  eval_set=[(scaled_train, y_train), (scaled_test, y_test)],
+    #                  verbose=True)
+    XGBOOST_prediction = XGBOOST_model.predict(scaled_test)
+    
+    print('XGBOOST MAE = ', mean_absolute_error(XGBOOST_prediction, y_test))
+    
+    
+    XGBOOST_df = pd.DataFrame({'y': XGBOOST_prediction.tolist()})
+    XGBOOST_df.index = y_test.index
+    
+    plt.figure(figsize=(20, 20))
+    fig, ax = plt.subplots()
+    ax.plot(dataset.tail(50))
+    ax.plot(XGBOOST_df.tail(50))
+    ax.set_title("XGBOOST")
+    
+    for ax in fig.get_axes():
+        ax.label_outer()
+    fig.autofmt_xdate()
