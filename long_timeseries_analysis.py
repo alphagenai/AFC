@@ -72,6 +72,8 @@ if __name__ == "__main__":
     cumulative_amount_sdf.index = pd.to_datetime(cumulative_amount_sdf.index,format='%Y/%m/%d %H:%M:%S')
     
 
+
+    paid_off_on_time, paid_off_eventually, gt_80, bad, very_bad, default = create_boolean_categories(cumulative_percent_sdf)
     categories = {'Paid off on time':paid_off_on_time,
               'Paid off after 18 months':paid_off_eventually ,
               'Almost fully repaid':gt_80 ,
@@ -88,12 +90,14 @@ if __name__ == "__main__":
     ## should add to 1000!
     print(run_sum)
     
+
     
     cumulative_percent_sdf[paid_off_on_time.index[paid_off_on_time]].plot()
     
     
     percent_sdf = create_percent_sdf(daily_sdf_pivot, cumulative=False, cohort='dec_17')
     
+    at_month_6, at_month_18, at_month_24, last_chance = pick_interesting_timepoints(cumulative_percent_sdf)
     
     
     
@@ -121,6 +125,13 @@ if __name__ == "__main__":
         fig, ax = plt.subplots()
         mean_daily_repayment[cat_name].plot(title=cat_name, legend=False)
         plt.savefig('files\\{}_daily_average_payments'.format(cat_name))
+
+
+        # daily variance across the group
+        fig, ax = plt.subplots()
+        std_daily_repayment[cat_name].plot(title=cat_name, legend=False)
+        plt.savefig('files\\{}_daily_variance_payments'.format(cat_name))
+        
         
         ## what do the cumulative payments look like?
         fig, ax = plt.subplots()
