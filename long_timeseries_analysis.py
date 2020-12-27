@@ -13,6 +13,11 @@ from matplotlib import pyplot as plt
 from individual_analysis1 import create_small_df, create_percent_sdf, convert_to_daily_pivot
 
 
+## This guy is interesting:
+# cumulative_percent_sdf['1351574'].plot()
+
+
+
 def pick_interesting_timepoints(cumulative_df):
     at_month_6 = cumulative_df.loc['2018-05-30']
     at_month_18 = cumulative_df.loc['2019-05-31']
@@ -21,9 +26,10 @@ def pick_interesting_timepoints(cumulative_df):
     return (at_month_6, at_month_18, at_month_24, last_chance)
 
 
+def df_autocorr(df, lag=1, axis=0):
+    """Compute full-sample column-wise autocorrelation for a DataFrame."""
+    return df.apply(lambda col: col.autocorr(lag), axis=axis)
 
-## This guy is interesting:
-# cumulative_percent_sdf['1351574'].plot()
 
 def payment_histograms():
     fig, ax = plt.subplots()
@@ -186,4 +192,11 @@ if __name__ == "__main__":
     
     
     ### 
+    #AUTOCORRELATION
+    ###
     
+    
+    monthly= percent_sdf.groupby(pd.Grouper(freq='M')).sum()
+    df_autocorr(monthly, lag=1, axis=0).plot()
+    autocorr = df_autocorr(monthly, lag=1, axis=0)
+    autocorr.sort_values().plot()
