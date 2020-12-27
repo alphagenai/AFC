@@ -57,7 +57,8 @@ def month_diff(a, b):
     return 12 * (a.dt.year - b.dt.year) + (a.dt.month - b.dt.month)
 
 
-def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42, cohort='jan_19', use_bigquery=True):
+def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42, 
+                    cohort='jan_19', use_bigquery=True):
 
     try:
         df = pd.read_pickle('files\\small_df_{}_{}.pkl'.format(size, cohort))
@@ -97,7 +98,7 @@ def create_small_df(size=100, limit=False, use_monthdiff=False, random_seed=42, 
             })    
     else:
         
-        df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:%S')
+        df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:%S').dt.tz_localize(None)
         
         df = df.groupby(['ContractId','TransactionTS']).max() # by using max we are assuming all entries are unique
                   
