@@ -52,15 +52,23 @@ def calculate_days_dropped(daily_sdf):
 
     #daily_sdf_fullts['ffill'] = daily_sdf_fullts['switch'].ffill()
     #daily_sdf_fullts['final'] = daily_sdf_fullts['cumsum'].sub(daily_sdf_fullts['ffill'], fill_value=0)
-    daily_sdf_fullts['elec_transaction_cumsum'] = daily_sdf_fullts.groupby(level=0)['elec_transaction'].apply(lambda x:cumsum_limit(x,floor=-1))
+    daily_sdf_fullts['elec_transaction_cumsum'] = daily_sdf_fullts.groupby(level=0)['elec_transaction'].apply(
+        lambda x:cumsum_limit(x,floor=0)
+        )
 
 
     ## this timeseries will start before contract start date
-    daily_sdf_fullts['bool'] = daily_sdf_fullts['elec_transaction_cumsum']<0
-    # = daily_sdf_fullts.groupby(['ContractId', 'bool'])['bool'].cumsum(axis=0)
-    daily_sdf_fullts['days_out_of_elec'] = daily_sdf_fullts.groupby(daily_sdf_fullts['bool'].diff().cumsum())['bool'].cumsum().mask(~daily_sdf_fullts['bool'], other=0)
-    daily_sdf_fullts['days_out_of_elec2'] = daily_sdf_fullts.groupby((~daily_sdf_fullts['bool']).cumsum())['bool'].cumsum()
-    daily_sdf_fullts.to_csv('temp.csv')
+    daily_sdf_fullts['elec_is_off'] = (daily_sdf_fullts['elec_transaction_cumsum']==0) & (daily_sdf_fullts['Duration']==0)
+
+    ## Looks complicated but its just cumsumming the Truth values, resetting when it hits a False
+    daily_sdf_fullts['days_out_of_elec'] = daily_sdf_fullts.groupby(
+        daily_sdf_fullts['elec_is_off'].diff().cumsum()
+        )['elec_is_off'].cumsum().mask(
+            ~daily_sdf_fullts['elec_is_off'], other=0
+            )
+    daily_sdf_fullts['days_out_of_elec2'] = daily_sdf_fullts.groupby(
+        (~daily_sdf_fullts['elec_is_off']).cumsum()
+        )['elec_is_off'].cumsum()
     return daily_sdf_fullts
 
 
@@ -91,19 +99,12 @@ if __name__ == "__main__":
 
 
     daily_sdf_fullts = calculate_days_dropped(daily_sdf)
-
-
-# ## smaller df - these guys are interesting because they both pay back the same but one is regular payer and the other is bulk
-# small_daily_sdf = daily_sdf.loc[['1574640',  '1574676']]
-
-# pivoted = small_daily_sdf[['days_dropped', 'AmountPaid']].unstack('ContractId').fillna(0).sort_index().cumsum(axis=0)
-
-# pivoted.plot(secondary_y=[('days_dropped', '1574640'),
-#             ('days_dropped', '1574676'),], legend=False) 
+    daily_sdf_fullts.to_csv('temp.csv')
 
 
 
-    
+
+def analysis_of_dropped_importance():    
     total_paid = daily_sdf.groupby('ContractId').sum()
     monthly_sdf = daily_sdf.groupby(['ContractId', pd.Grouper(freq='M', level=1)]).sum()
     monthly_cumsum = monthly_sdf.groupby('ContractId').cumsum(axis=0)
@@ -149,3 +150,13 @@ if __name__ == "__main__":
     
     fig, ax = plt.subplots()
     plt.scatter(all_features['AmountPaid_6m'], all_features['percent_paid'])
+
+
+# ## smaller df - these guys are interesting because they both pay back the same but one is regular payer and the other is bulk
+# small_daily_sdf = daily_sdf.loc[['1574640',  '1574676']]
+
+# pivoted = small_daily_sdf[['days_dropped', 'AmountPaid']].unstack('ContractId').fillna(0).sort_index().cumsum(axis=0)
+
+# pivoted.plot(secondary_y=[('days_dropped', '1574640'),
+#             ('days_dropped', '1574676'),], legend=False) 
+
