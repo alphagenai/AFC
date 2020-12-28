@@ -42,34 +42,26 @@ def calculate_days_dropped(daily_sdf):
     idx = pd.MultiIndex.from_product(
         [daily_sdf.index.levels[0], date_idx], names=['ContractId', 'TransactionTS'])
 
-    daily_sdf_fullts = daily_sdf.reindex(idx,).fillna(0)  #{'Duration':-1, 
-                                                         #'AmountPaid':0})
-#    daily_sdf_fullts['days_elec_left'] = daily_sdf_fullts.groupby(['ContractId', 'Duration']).cumsum(axis=0)    #['Duration'].cumsum(axis=0).apply(lambda x : np.max([0,x]))
-#    daily_sdf_fullts['days_without'] = daily_sdf_fullts.groupby(level=0)['Duration'].apply(lambda x: 0 if x > 0 else x)
-
-
-#    daily_sdf_fullts['days_elec_left'] = daily_sdf_fullts.loc[daily_sdf_fullts['Duration'] > 0, ['Duration']].cumsum(axis=0)
+    daily_sdf_fullts = daily_sdf.reindex(idx,).fillna(0)  
     daily_sdf_fullts['elec_transaction'] = daily_sdf_fullts['Duration'] - 1
-    daily_sdf_fullts['cumsum'] = daily_sdf_fullts.groupby(level=0)['Duration'].cumsum(axis=0)
-    daily_sdf_fullts['cumsum_floor'] = daily_sdf_fullts['cumsum'].apply(lambda x : np.max([0,x]))
 
-    daily_sdf_fullts['nan_non_zero'] = daily_sdf_fullts['cumsum'].mask(daily_sdf_fullts['Duration'] > 0)
+    # daily_sdf_fullts['switch'] = daily_sdf_fullts['cumsum'].mask(
+    #     (daily_sdf_fullts['cumsum'] < 0) & (daily_sdf_fullts['Duration'] > 0),
+    #     other = daily_sdf_fullts['Duration']
+    #     )
 
-    daily_sdf_fullts['switch'] = daily_sdf_fullts['cumsum'].mask(
-        (daily_sdf_fullts['cumsum'] < 0) & (daily_sdf_fullts['Duration'] > 0),
-        other = daily_sdf_fullts['Duration']
-        )
-
-    daily_sdf_fullts['ffill'] = daily_sdf_fullts['switch'].ffill()
-    daily_sdf_fullts['final'] = daily_sdf_fullts['cumsum'].sub(daily_sdf_fullts['ffill'], fill_value=0)
-    daily_sdf_fullts['elec_transaction_cumsum'] = daily_sdf_fullts.groupby(level=0)['elec_transaction'].apply(lambda x:cumsum_limit(x,0))
+    #daily_sdf_fullts['ffill'] = daily_sdf_fullts['switch'].ffill()
+    #daily_sdf_fullts['final'] = daily_sdf_fullts['cumsum'].sub(daily_sdf_fullts['ffill'], fill_value=0)
+    daily_sdf_fullts['elec_transaction_cumsum'] = daily_sdf_fullts.groupby(level=0)['elec_transaction'].apply(lambda x:cumsum_limit(x,floor=-1))
 
 
     ## this timeseries will start before contract start date
-    daily_sdf_fullts['days_out_of_elec'] = daily_sdf_fullts.groupby(level=0)['elec_transaction'].apply(lambda x:cumsum_limit(x,-np.inf,limit=0))
-
+    daily_sdf_fullts['bool'] = daily_sdf_fullts['elec_transaction_cumsum']<0
+    # = daily_sdf_fullts.groupby(['ContractId', 'bool'])['bool'].cumsum(axis=0)
+    daily_sdf_fullts['days_out_of_elec'] = daily_sdf_fullts.groupby(daily_sdf_fullts['bool'].diff().cumsum())['bool'].cumsum().mask(~daily_sdf_fullts['bool'], other=0)
+    daily_sdf_fullts['days_out_of_elec2'] = daily_sdf_fullts.groupby((~daily_sdf_fullts['bool']).cumsum())['bool'].cumsum()
     daily_sdf_fullts.to_csv('temp.csv')
-    return daily_sdf
+    return daily_sdf_fullts
 
 
 def cumsum_limit(s, floor=-np.inf, limit=np.inf):
@@ -98,7 +90,7 @@ if __name__ == "__main__":
     daily_sdf = df.groupby(['ContractId', pd.Grouper(freq='1D', level=1)]).sum()
 
 
-    daily_sdf = calculate_days_dropped(daily_sdf)
+    daily_sdf_fullts = calculate_days_dropped(daily_sdf)
 
 
 # ## smaller df - these guys are interesting because they both pay back the same but one is regular payer and the other is bulk
