@@ -64,6 +64,10 @@ def calculate_days_dropped(daily_sdf):
     daily_sdf_fullts['final'] = daily_sdf_fullts['cumsum'].sub(daily_sdf_fullts['ffill'], fill_value=0)
     daily_sdf_fullts['elec_transaction_cumsum'] = daily_sdf_fullts.groupby(level=0)['elec_transaction'].apply(lambda x:cumsum_limit(x,0))
 
+
+    ## this timeseries will start before contract start date
+    daily_sdf_fullts['days_out_of_elec'] = daily_sdf_fullts.groupby(level=0)['elec_transaction'].apply(lambda x:cumsum_limit(x,-np.inf,limit=0))
+
     daily_sdf_fullts.to_csv('temp.csv')
     return daily_sdf
 
