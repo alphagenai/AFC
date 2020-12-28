@@ -6,6 +6,7 @@ Created on Thu Dec 10 15:23:07 2020
 """
 
 import pandas as pd
+import numpy as np
 from matplotlib import pyplot as plt
 
 from individual_analysis1 import create_small_df, PAYMENT_DATA_SQL
@@ -31,6 +32,8 @@ def calculate_days_dropped(daily_sdf):
     
     ## days since token dropped
     # WHAT HAPPENS TO ADJUSTMENTS
+    
+    ### this is not quite right - doesnt take into account credits unused from before
     daily_sdf['days_dropped'] = (daily_sdf['TransactionTS']  - daily_sdf['prev_payment_date'] - pd.to_timedelta(daily_sdf['prev_duration'], unit='D')).dt.days
 
     
@@ -39,21 +42,45 @@ def calculate_days_dropped(daily_sdf):
     idx = pd.MultiIndex.from_product(
         [daily_sdf.index.levels[0], date_idx], names=['ContractId', 'TransactionTS'])
 
-    daily_sdf_fullts = daily_sdf.reindex(idx,).fillna({'Duration':-1, 
-                                                       'AmountPaid':0})
+    daily_sdf_fullts = daily_sdf.reindex(idx,).fillna(0)  #{'Duration':-1, 
+                                                         #'AmountPaid':0})
 #    daily_sdf_fullts['days_elec_left'] = daily_sdf_fullts.groupby(['ContractId', 'Duration']).cumsum(axis=0)    #['Duration'].cumsum(axis=0).apply(lambda x : np.max([0,x]))
 #    daily_sdf_fullts['days_without'] = daily_sdf_fullts.groupby(level=0)['Duration'].apply(lambda x: 0 if x > 0 else x)
 
 
 #    daily_sdf_fullts['days_elec_left'] = daily_sdf_fullts.loc[daily_sdf_fullts['Duration'] > 0, ['Duration']].cumsum(axis=0)
+    daily_sdf_fullts['elec_transaction'] = daily_sdf_fullts['Duration'] - 1
     daily_sdf_fullts['cumsum'] = daily_sdf_fullts.groupby(level=0)['Duration'].cumsum(axis=0)
-    daily_sdf_fullts['nan_non_zero'] = daily_sdf_fullts['cumsum'].mask(daily_sdf_fullts['Duration'] > 0)
-    daily_sdf_fullts['ffill'] = daily_sdf_fullts['nan_non_zero'].ffill()
+    daily_sdf_fullts['cumsum_floor'] = daily_sdf_fullts['cumsum'].apply(lambda x : np.max([0,x]))
 
-    daily_sdf_fullts['final'] = daily_sdf_fullts['cumsum'].sub(daily_sdf_fullts['nan_non_zero'].ffill(), fill_value=0)
+    daily_sdf_fullts['nan_non_zero'] = daily_sdf_fullts['cumsum'].mask(daily_sdf_fullts['Duration'] > 0)
+
+    daily_sdf_fullts['switch'] = daily_sdf_fullts['cumsum'].mask(
+        (daily_sdf_fullts['cumsum'] < 0) & (daily_sdf_fullts['Duration'] > 0),
+        other = daily_sdf_fullts['Duration']
+        )
+
+    daily_sdf_fullts['ffill'] = daily_sdf_fullts['switch'].ffill()
+    daily_sdf_fullts['final'] = daily_sdf_fullts['cumsum'].sub(daily_sdf_fullts['ffill'], fill_value=0)
+    daily_sdf_fullts['elec_transaction_cumsum'] = daily_sdf_fullts.groupby(level=0)['elec_transaction'].apply(lambda x:cumsum_limit(x,0))
+
     daily_sdf_fullts.to_csv('temp.csv')
     return daily_sdf
 
+
+def cumsum_limit(s, floor=-np.inf, limit=np.inf):
+    out = []
+    runsum = 0
+    for i, v in s.iteritems():
+        runsum += v
+        if runsum <= floor:
+            runsum = floor
+        if runsum >= limit:
+            runsum = limit
+        out.append(runsum)
+    return pd.Series(data=out, index=s.index)
+    
+    
 
 
 
