@@ -28,25 +28,40 @@ first_payment = monthly_sdf_pivot.iloc[1]
 
 first_payment[first_payment==0]
 
+
+####### INCLUDES WHERE THERE IS ZERO PAYMENT DUE TO COMPLETED CONTRACTS
 defaults = monthly_sdf_pivot.iloc[1:]==0
 individual_uncond_PD = defaults.sum()/defaults.count()
 unconditional_PD = defaults.sum().sum()/defaults.count().sum()
 
 last_month_defaults = defaults.shift(1)
 
-PD_given_D = defaults & last_month_defaults
-PD_given_ND = defaults & ~last_month_defaults.astype('bool')
+D_given_D = defaults & last_month_defaults
+D_given_ND = defaults & ~last_month_defaults.astype('bool')
 
-PND_given_D = ~defaults.astype('bool') & last_month_defaults
-PND_given_ND = ~defaults.astype('bool') & ~last_month_defaults.astype('bool')
+ND_given_D = ~defaults.astype('bool') & last_month_defaults
+ND_given_ND = ~defaults.astype('bool') & ~last_month_defaults.astype('bool')
 
 
+PD_given_D = D_given_D.sum().sum() / D_given_D.count().sum()
+PD_given_ND = D_given_ND.sum().sum() / D_given_ND.count().sum()
 
-# monthly_sdf_pivot.to_csv('monthly_df.csv')
-# defaults.to_csv('defaults.csv')
-# PD_given_D.to_csv('PD_given_D.csv')
-# PD_given_ND.to_csv('PD_given_ND.csv')
+PND_given_D = ND_given_D.sum().sum() / ND_given_D.count().sum()
+PND_given_ND = ND_given_ND.sum().sum() / ND_given_ND.count().sum()
+
+PD_given_D + PD_given_ND + PND_given_D + PND_given_ND + 1/35. #(january 2017 not included)
+
 
 
 
 ## 2) MONTH MATTERS
+
+
+PD_given_D = D_given_D.sum(axis=1) / D_given_D.count(axis=1)
+PD_given_ND = D_given_ND.sum(axis=1) / D_given_ND.count(axis=1)
+
+PND_given_D = ND_given_D.sum(axis=1)/ ND_given_D.count(axis=1)
+PND_given_ND = ND_given_ND.sum(axis=1)/ ND_given_ND.count(axis=1)
+
+PD_given_D + PD_given_ND + PND_given_D + PND_given_ND
+
