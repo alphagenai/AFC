@@ -38,7 +38,7 @@ def daily_default_full_timeseries():
 monthly_sdf = daily_sdf.groupby(['ContractId',pd.Grouper(freq='M', level=1)])['AmountPaid'].sum()
 monthly_sdf_pivot = monthly_sdf.unstack(0).fillna(0)
 
-cumulative_percent_sdf = create_percent_sdf(monthly_sdf_pivot, cumulative=True, cohort='dec_17')
+monthly_cumulative_percent_sdf_pivot = create_percent_sdf(monthly_sdf_pivot, cumulative=True, cohort='dec_17')
 
 
 first_payment = monthly_sdf_pivot.iloc[1]
@@ -51,7 +51,7 @@ first_payment[first_payment==0]
 
 
 defaults = monthly_sdf_pivot.iloc[1:]==0 # total non-NaN: 28,593
-paid = cumulative_percent_sdf >= 0.99
+paid = monthly_cumulative_percent_sdf_pivot >= 0.99
 
 ## completed contracts are converted to NaN
 defaults = defaults.mask(paid).astype('boolean')

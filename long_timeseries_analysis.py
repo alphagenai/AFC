@@ -131,7 +131,7 @@ if __name__ == "__main__":
         fig, ax = plt.subplots()
         mean_daily_repayment[cat_name].plot(title=cat_name, legend=False)
         plt.savefig('files\\{}_daily_average_payments'.format(cat_name))
-
+        ## look into changing the scale to max 0.002
 
         # daily variance across the group
         fig, ax = plt.subplots()

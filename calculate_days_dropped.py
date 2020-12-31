@@ -22,19 +22,20 @@ each classification can have different prior for bayes
 
 
 def calculate_days_dropped(daily_sdf):
-
+    """ Calculate a cumulative sum of days without Electricity, first creating an
+    index containing all dates """
 
 
     
-    daily_sdf['TransactionTS'] = daily_sdf.index.get_level_values(1)
+    #daily_sdf['TransactionTS'] = daily_sdf.index.get_level_values(1)
 
-    daily_sdf[['prev_payment_date', 'prev_duration']] = daily_sdf.groupby(level=0)[['TransactionTS', 'Duration']].shift(1)
+    #daily_sdf[['prev_payment_date', 'prev_duration']] = daily_sdf.groupby(level=0)[['TransactionTS', 'Duration']].shift(1)
     
     ## days since token dropped
     # WHAT HAPPENS TO ADJUSTMENTS
     
     ### this is not quite right - doesnt take into account credits unused from before
-    daily_sdf['days_dropped'] = (daily_sdf['TransactionTS']  - daily_sdf['prev_payment_date'] - pd.to_timedelta(daily_sdf['prev_duration'], unit='D')).dt.days
+    #daily_sdf['days_dropped'] = (daily_sdf['TransactionTS']  - daily_sdf['prev_payment_date'] - pd.to_timedelta(daily_sdf['prev_duration'], unit='D')).dt.days
 
     
     ## stupid americans
@@ -61,14 +62,16 @@ def calculate_days_dropped(daily_sdf):
     daily_sdf_fullts['elec_is_off'] = (daily_sdf_fullts['elec_transaction_cumsum']==0) & (daily_sdf_fullts['Duration']==0)
 
     ## Looks complicated but its just cumsumming the Truth values, resetting when it hits a False
+
+    # daily_sdf_fullts['days_out_of_elec'] = daily_sdf_fullts.groupby(
+    #     daily_sdf_fullts['elec_is_off'].diff().cumsum()
+    #     )['elec_is_off'].cumsum().mask(
+    #         ~daily_sdf_fullts['elec_is_off'], other=0
+    #         )
     daily_sdf_fullts['days_out_of_elec'] = daily_sdf_fullts.groupby(
-        daily_sdf_fullts['elec_is_off'].diff().cumsum()
-        )['elec_is_off'].cumsum().mask(
-            ~daily_sdf_fullts['elec_is_off'], other=0
-            )
-    daily_sdf_fullts['days_out_of_elec2'] = daily_sdf_fullts.groupby(
-        (~daily_sdf_fullts['elec_is_off']).cumsum()
+        ['ContractId',(~daily_sdf_fullts['elec_is_off']).cumsum()]
         )['elec_is_off'].cumsum()
+    daily_sdf_fullts['PAR30+'] = (daily_sdf_fullts['days_out_of_elec'] > 30)
     return daily_sdf_fullts
 
 
@@ -99,7 +102,7 @@ if __name__ == "__main__":
 
 
     daily_sdf_fullts = calculate_days_dropped(daily_sdf)
-    daily_sdf_fullts.to_csv('temp.csv')
+    daily_sdf_fullts.to_csv('temp2.csv')
 
 
 
