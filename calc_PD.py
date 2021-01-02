@@ -51,10 +51,10 @@ first_payment[first_payment==0]
 
 
 defaults = monthly_sdf_pivot.iloc[1:]==0 # total non-NaN: 28,593
-paid = monthly_cumulative_percent_sdf_pivot >= 0.99
+fully_paid = monthly_cumulative_percent_sdf_pivot >= 0.99
 
 ## completed contracts are converted to NaN
-defaults = defaults.mask(paid).astype('boolean')
+defaults = defaults.mask(fully_paid).astype('boolean')
 
 individual_uncond_PD = defaults.sum(axis=0, skipna=True)/defaults.count(axis=0)  #df.count() does not count NaNs
 unconditional_PD = defaults.sum(axis=0, skipna=True).sum()/defaults.count(axis=0).sum()
@@ -75,7 +75,7 @@ PND_given_D = ND_given_D.sum().sum() / ND_given_D.count().sum() #1,060, 28,198
 PND_given_ND = ND_given_ND.sum().sum() / ND_given_ND.count().sum()
 
 ## for completeness
-paid_off_months = paid.sum().sum() # 6,407
+paid_off_months = fully_paid.sum().sum() # 6,407
 P_paid_off = paid_off_months / monthly_sdf_pivot.count().sum()  ## 6,407/36,000
 
 
@@ -103,3 +103,9 @@ PND_given_ND = ND_given_ND.sum(axis=1)/ ND_given_ND.count(axis=1)
 ## also dont always sum to 1
 PD_given_D + PD_given_ND + PND_given_D + PND_given_ND
 
+
+
+
+#### BAYESIAN
+
+## TO DO
