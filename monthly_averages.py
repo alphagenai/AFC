@@ -20,10 +20,14 @@ df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:
 df = df.groupby(['ContractId', 'TransactionTS']).sum()
 
 daily_sdf = df.groupby(['ContractId', pd.Grouper(freq='1D', level=1)]).sum()
-daily_sdf_pivot = daily_sdf.unstack(0).fillna(0)
+daily_sdf_pivot = daily_sdf['AmountPaid'].unstack(0).fillna(0)
 daily_percent_pivot = create_percent_sdf(daily_sdf_pivot, cumulative=False, use_monthdiff=False, cohort='dec_17')
 
 
-monthly_sdf = daily_sdf.groupby(['ContractId',pd.Grouper(freq='M', level=1)])['AmountPaid'].sum()
+monthly_sdf = daily_sdf.groupby(['ContractId',pd.Grouper(freq='M', level=1)])['AmountPaid'].sum().to_frame()
 
 monthly_percent_pivot = daily_percent_pivot.groupby(pd.Grouper(freq='M')).sum()
+
+monthly_sdf['paid'] = monthly_sdf!=0 ##is this ever false??
+
+monthly_sdf["MovingAverage"] = monthly_sdf.groupby(['ContractId','paid',])['AmountPaid'].rolling(6).mean().unstack(1)
