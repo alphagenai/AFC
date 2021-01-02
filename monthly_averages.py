@@ -26,8 +26,15 @@ daily_percent_pivot = create_percent_sdf(daily_sdf_pivot, cumulative=False, use_
 
 monthly_sdf = daily_sdf.groupby(['ContractId',pd.Grouper(freq='M', level=1)])['AmountPaid'].sum().to_frame()
 
+date_idx = pd.date_range('31/12/2017', '30-11-2020', freq='M')
+idx = pd.MultiIndex.from_product(
+    [monthly_sdf.index.levels[0], date_idx], names=['ContractId', 'TransactionTS'])
+
+monthly_sdf_fullts = monthly_sdf.reindex(idx,).fillna(0)
+
 monthly_percent_pivot = daily_percent_pivot.groupby(pd.Grouper(freq='M')).sum()
 
-monthly_sdf['paid'] = monthly_sdf!=0 ##is this ever false??
+monthly_sdf_fullts['paid'] = monthly_sdf_fullts['AmountPaid']==0
+monthly_sdf_fullts["MovingAverage"] = 
 
-monthly_sdf["MovingAverage"] = monthly_sdf.groupby(['ContractId','paid',])['AmountPaid'].rolling(6).mean().unstack(1)
+temp = monthly_sdf_fullts.groupby(['ContractId','paid',])['AmountPaid'].rolling(6).mean().unstack(1)[True]
