@@ -34,7 +34,8 @@ monthly_sdf_fullts = monthly_sdf.reindex(idx,).fillna(0)
 
 monthly_percent_pivot = daily_percent_pivot.groupby(pd.Grouper(freq='M')).sum()
 
-monthly_sdf_fullts['paid'] = monthly_sdf_fullts['AmountPaid']==0
-monthly_sdf_fullts["MovingAverage"] = 
+monthly_sdf_fullts['paid'] = monthly_sdf_fullts['AmountPaid']!=0
 
-temp = monthly_sdf_fullts.groupby(['ContractId','paid',])['AmountPaid'].rolling(6).mean().unstack(1)[True]
+## need to drop the first month and its not currently grouping by contractID properly
+ 
+monthly_sdf_fullts["MovingAverage"] = monthly_sdf_fullts.groupby(['ContractId', 'paid',])['AmountPaid'].rolling(6).mean().unstack(1)[True].droplevel(level=0)
