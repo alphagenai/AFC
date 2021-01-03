@@ -46,8 +46,29 @@ one_contract_id = monthly_sdf_pivot.columns[3]
 
 one_ma = ma_pivot[one_contract_id]
 forecast_date = '2019-12-31'
+all_dates = monthly_sdf_pivot.index.get_level_values(0)[forecast_date:]
 
 defaults = monthly_sdf_pivot.iloc[1:]==0 # total non-NaN: 28,593
+t=0
+if defaults.loc[forecast_date, one_contract_id]: # paid
+    EV_ND[t+1] = one_ma[forecast_date]*PND_given_ND
+else: # not paid
+    EV_ND[t+1] = one_ma[forecast_date]*PND_given_D
 
-if defaults.loc[forecast_date, one_contract_id]:
+
+class Node(object):
+    def __init__(self, prev_payout):
+        self.probability = 0
+        self.value = 0
+        self.payout = None
+        self.prev_payout = prev_payout
+
     
+        
+class LatticeModel(object):
+    def __init__(self):
+        self.number_of_timepoints = 0
+
+    def update(self, prev_nodes):
+        """ create a new set of nodes for the next timepoint """
+        
