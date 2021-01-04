@@ -89,8 +89,12 @@ def calc_PD(monthly_sdf_pivot, ):
         ND_given_ND.sum().sum(),
         paid_off_months],)  #34,000 ==> 34 months ==> 2 months not included
     
-    return PD_given_D, PD_given_ND, PND_given_D, PND_given_ND
-    
+    PD_dict = {'PD_given_D':PD_given_D, 
+               'PD_given_ND':PD_given_ND, 
+               'PND_given_D':PND_given_D, 
+               'PND_given_ND':PND_given_ND,
+               }
+    return PD_dict
     
     ## 2) MONTH MATTERS
     
