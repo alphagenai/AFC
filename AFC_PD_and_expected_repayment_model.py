@@ -30,117 +30,66 @@ ma_pivot = monthly_sdf_fullts['MovingAverage'].unstack(0).shift(1).fillna(method
 
 ## logic
 
-"""
-
-if month = paid:
-    month+1 = paid*PNDgivenND + PDgivenND*0
-elif month != paid
-    month+1 = paid*PNDgivenD + PDgivenD*0
-    
-"""
-
-
-one_month_forecast_if_paid = ma_pivot.multiply(PND_given_ND)
-one_month_forecast_if_default = ma_pivot.multiply(PND_given_D)
-
-
 one_contract_id = monthly_sdf_pivot.columns[3]
 
 one_ma = ma_pivot[one_contract_id]
-forecast_date = '2019-12-31'
+forecast_startdate = '2019-12-31'
 
-#all_dates = monthly_sdf_pivot.index.get_level_values(0)[forecast_date:]
+forecast_dates = monthly_sdf_pivot[forecast_startdate:].index
 
 defaults = monthly_sdf_pivot.iloc[1:]==0 # total non-NaN: 28,593
-t=0
-if defaults.loc[forecast_date, one_contract_id]: # paid
-    EV_ND[t+1] = one_ma[forecast_date]*PND_given_ND
-else: # not paid
-    EV_ND[t+1] = one_ma[forecast_date]*PND_given_D
-
-
-## don't exactly add to 1
-PD = PD_given_D + PD_given_ND
-PND = PND_given_D + PND_given_ND
-
-PND_given_ND*PND_given_ND
-
-PND_given_ND*PD_given_ND
-
-PD_given_ND*PND_given_D
-
-PD_given_ND*PD_given_D
 
 
 
+average_payment = one_ma[forecast_startdate]
+initial_payment = monthly_sdf_pivot.loc[forecast_startdate, one_contract_id] #bool
 
-
-average_payment = one_ma[forecast_date]
-start_date_payment = defaults.loc[forecast_date, one_contract_id] #bool
-
-if start_date_payment:
-    node1 = Node(1, average_payment, None)
-    node1.p = PND_given_ND
-
-    node2 = Node(1, 0, None)
-    node2.p = PD_given_ND
-
-else:
-    node3 = Node(1, average_payment, None)
-    node3.p = PND_given_D
-
-    node4 = Node(1, 0)
-    node4.p = PD_given_D
-    
-node5 = Node(2, average_payment, node1)
-node5.p = node1.p*PND_given_ND
-
-
-node6 = Node(2, 0, node1)
-
-node7 = Node(2, average_payment, node2)
-
-node8 = Node(2, 0, node2)
 
 class Node(object):
     def __init__(self, t, val, prev_node):
         self.t = t
         self.value = val
         if prev_node is not None:
-            if prev_node.value & val:
+            prev_paid = (prev_node.value != 0)
+            paid = (val != 0)
+            if prev_paid & paid:
                 self.p = prev_node.p*PND_given_ND
-            elif prev_node.value & ~val:
+            elif prev_paid & ~paid:
                 self.p = prev_node.p*PD_given_ND
-            elif ~prev_node.value & val:
+            elif ~prev_paid & paid:
                 self.p = prev_node.p*PND_given_D
-            elif ~prev_node.value & ~val:
+            elif ~prev_paid & ~paid:
                 self.p = prev_node.p*PD_given_D
             else:
                 raise ValueError('Something went wrong')
-        
+
 class LatticeModel(object):
-    def __init__(self, initial_payment, number_of_timepoints, average_payment, 
+    def __init__(self, initial_payment, average_payment, 
                  contract_id):
         self.initial_payment = initial_payment
-        self.number_of_timepoints = number_of_timepoints
         self.average_payment = average_payment
         self.contract_id = contract_id
         
 
         if initial_payment:
-            self.initial_node = Node(0, initial_payment, None)  
-            self.initial_node.p = 1
+            initial_node = Node(0, initial_payment, None)  
+            initial_node.p = 1
         else:
-            self.initial_node = Node(0, 0, None)
-            self.initial_node.p = 1
+            initial_node = Node(0, 0, None)
+            initial_node.p = 1
 
-        self.nodes_dict = {0:initial_node}            
+        self.nodes_dict = {0:[initial_node,]}            
 
-    def add_level(self, t):
+    def add_level(self,):
         """ create a new set of nodes for the next timepoint """
+        t = max(self.nodes_dict.keys())
         new_nodes = []
         for node in self.nodes_dict[t]:
             node.offspring1 = Node(t+1, self.average_payment, node)
             node.offspring2 = Node(t+1, 0, node)
-            new_nodes.append([node.offspring1, node.offspring2])
+            new_nodes.extend([node.offspring1, node.offspring2])
         self.nodes_dict[t+1] = new_nodes
+        
+        
+lm = LatticeModel(initial_payment, average_payment, contract_id=one_contract_id)
+lm.add_level()
