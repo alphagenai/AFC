@@ -20,7 +20,7 @@ def main():
     daily_sdf = df.groupby(['ContractId', pd.Grouper(freq='1D', level=1)]).sum()
     monthly_sdf = daily_sdf.groupby(['ContractId',pd.Grouper(freq='M', level=1)])['AmountPaid'].sum()
     monthly_sdf_pivot = monthly_sdf.unstack(0).fillna(0)
-    calc_PD(monthly_sdf_pivot)
+    PD_given_D, PD_given_ND, PND_given_D, PND_given_ND = calc_PD(monthly_sdf_pivot)
 
 
 def daily_default_full_timeseries():
@@ -72,7 +72,7 @@ def calc_PD(monthly_sdf_pivot, ):
     PD_given_D = D_given_D.sum().sum() / D_given_D.count().sum()  #2,233/29,024
     PD_given_ND = D_given_ND.sum().sum() / D_given_ND.count().sum()
     
-    PND_given_D = ND_given_D.sum().sum() / ND_given_D.count().sum() #1,060, 28,198
+    PND_given_D = ND_given_D.sum().sum() / ND_given_D.count().sum() #1,060/28,198
     PND_given_ND = ND_given_ND.sum().sum() / ND_given_ND.count().sum()
     
     ## for completeness
@@ -81,7 +81,7 @@ def calc_PD(monthly_sdf_pivot, ):
     
     
     ## why doesnt this equal 1
-    PD_given_D + PD_given_ND + PND_given_D + PND_given_ND + P_paid_off
+    PD_given_D + PD_given_ND + PND_given_D + PND_given_ND
     
     np.sum([D_given_D.sum().sum(),
         D_given_ND.sum().sum(),
@@ -94,7 +94,7 @@ def calc_PD(monthly_sdf_pivot, ):
     
     ## 2) MONTH MATTERS
     
-    
+def calc_monthly_PD():
     PD_given_D = D_given_D.sum(axis=1) / D_given_D.count(axis=1)
     PD_given_ND = D_given_ND.sum(axis=1) / D_given_ND.count(axis=1)
     
