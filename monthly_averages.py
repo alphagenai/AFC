@@ -28,9 +28,9 @@ def calc_moving_average(monthly_sdf):
     idx = pd.MultiIndex.from_product(
         [monthly_sdf.index.levels[0], date_idx], names=['ContractId', 'TransactionTS'])
     
-    monthly_sdf_fullts = monthly_sdf.reindex(idx,).fillna(0)    
+    monthly_sdf_fullts = monthly_sdf.to_frame().reindex(idx,).fillna(0)    
     
-    monthly_sdf_fullts['paid'] = monthly_sdf_fullts['AmountPaid']!=0
+    monthly_sdf_fullts['paid'] = monthly_sdf_fullts!=0
     
     ## need to drop the first month and its not currently grouping by contractID properly
      
