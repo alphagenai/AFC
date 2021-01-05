@@ -78,7 +78,6 @@ def calc_PD(monthly_sdf_pivot, ):
     D_given_D = defaults & last_month_defaults  # 2,233 events
     D_given_ND = defaults & ~last_month_defaults # 1,139
     
-    
     ND_given_D = ~defaults & last_month_defaults # 1,073
     ND_given_ND = ~defaults & ~last_month_defaults # 23,679
 
@@ -185,11 +184,47 @@ def counterparty_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND):
 
 #### BAYESIAN
 
-""" This is where a HMM could come in - classify customers into credit buckets for conditional PDs """
+def label_logic(two_element_series):
+    if two_element_series[0] & two_element_series[1]:
+        return 1
+    if two_element_series[0] & ~two_element_series[1]:
+        return 2
+    if ~two_element_series[0] & two_element_series[1]:
+        return 3
+    if ~two_element_series[0] & ~two_element_series[1]:
+        return 4
+    
 
-## TO DO
 
-#prior = 
+def bayes_PD_update():
+    """ This is where a HMM could come in - classify customers into credit buckets for conditional PDs """
+    
+    import pymc3 as pm
+    
+    
+    ## TO DO
+    
+    #prior = 
+    
+    one_contract_id = monthly_sdf_pivot.columns[3]
+    default_ts = defaults.loc[:,one_contract_id]
+    lmd_ts = last_month_defaults.loc[:,one_contract_id]
+    
+    df = pd.concat([default_ts, lmd_ts], axis=1)
+    
+    y = df.apply(label_logic, axis=1)
+    
+    k = 4
+    n = len(y)
+    
+    with pm.Model() as conditional_default_model:
+        
+        # initializes the Dirichlet distribution with a uniform prior:
+        a = np.ones(k) 
+        
+        theta = pm.Dirichlet("theta", a=a)
+            
+        results = pm.Multinomial("results", n=n, p=theta, observed=y)
 
 if __name__ == "__main__":
     main()
