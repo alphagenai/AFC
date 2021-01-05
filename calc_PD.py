@@ -94,13 +94,27 @@ def calc_PD(monthly_sdf_pivot, ):
     return PD_dict
     
 def point_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND): 
-    PD_given_D = D_given_D.sum().sum() / D_given_D.count().sum()  #2,233/28,647
-    PD_given_ND = D_given_ND.sum().sum() / D_given_ND.count().sum() # 1,139/28,124
+    # PD_given_D = D_given_D.sum().sum() / D_given_D.count().sum()  #2,233/28,647
+    # PD_given_ND = D_given_ND.sum().sum() / D_given_ND.count().sum() # 1,139/28,124
     
-    PND_given_D = ND_given_D.sum().sum() / ND_given_D.count().sum() #1,060/28,647
-    PND_given_ND = ND_given_ND.sum().sum() / ND_given_ND.count().sum()  #23,161/28,124
+    # PND_given_D = ND_given_D.sum().sum() / ND_given_D.count().sum() #1,060/28,647
+    # PND_given_ND = ND_given_ND.sum().sum() / ND_given_ND.count().sum()  #23,161/28,124
     ## Total from Excel: 27,593
-    
+
+    total_given_D = how_many_true(D_given_D) + how_many_true(ND_given_D)
+    total_given_ND = how_many_true(D_given_ND) + how_many_true(ND_given_ND)
+
+    PD_given_D = how_many_true(D_given_D) / total_given_D 
+    PD_given_ND = how_many_true(D_given_ND) / total_given_ND # = (1 - PD_given_D)
+    PND_given_D = how_many_true(ND_given_D) / total_given_D # = (1 - PND_given_ND)
+    PND_given_ND = how_many_true(ND_given_ND) / total_given_ND 
+
+    logging.debug('PD_given_D : {} / {}'.format(how_many_true(D_given_D) , total_given_D))    
+    logging.debug('PD_given_ND : {} / {}'.format(how_many_true(D_given_ND) , total_given_ND))    
+    logging.debug('PND_given_D : {} / {}'.format(how_many_true(ND_given_D) , total_given_D))    
+    logging.debug('PND_given_ND : {} / {}'.format(how_many_true(ND_given_ND) , total_given_ND))    
+
+
     """    
     ## for completeness
     paid_off_months = fully_paid.sum().sum() # 6,407
@@ -127,13 +141,38 @@ def point_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND):
     ## 2) MONTH MATTERS
     
 def temporal_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND):
-    PD_given_D = D_given_D.sum(axis=1) / D_given_D.count(axis=1)  ## gets larger as time goes on as good payers have finished their contracts
-    PD_given_ND = D_given_ND.sum(axis=1) / D_given_ND.count(axis=1)
+
+    total_given_D = D_given_D.sum(axis=1) + ND_given_D.sum(axis=1)
+    total_given_ND = D_given_ND.sum(axis=1) + ND_given_ND.sum(axis=1)
+
     
-    PND_given_D = ND_given_D.sum(axis=1)/ ND_given_D.count(axis=1)
-    PND_given_ND = ND_given_ND.sum(axis=1)/ ND_given_ND.count(axis=1)
+
+    PD_given_D = D_given_D.sum(axis=1) / total_given_D 
+    PD_given_ND = D_given_ND.sum(axis=1) / total_given_ND # = (1 - PD_given_D)
+    PND_given_D = ND_given_D.sum(axis=1) / total_given_D # = (1 - PND_given_ND)
+    PND_given_ND = ND_given_ND.sum(axis=1) / total_given_ND 
     
-    ## also dont always sum to 1
+    PD_given_D + PD_given_ND + PND_given_D + PND_given_ND
+    PD_dict = {'PD_given_D':PD_given_D, 
+               'PD_given_ND':PD_given_ND, 
+               'PND_given_D':PND_given_D, 
+               'PND_given_ND':PND_given_ND,
+               }
+    return PD_dict
+
+
+def counterparty_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND):
+
+    total_given_D = D_given_D.sum(axis=0) + ND_given_D.sum(axis=0)
+    total_given_ND = D_given_ND.sum(axis=0) + ND_given_ND.sum(axis=0)
+
+    
+
+    PD_given_D = D_given_D.sum(axis=0) / total_given_D 
+    PD_given_ND = D_given_ND.sum(axis=0) / total_given_ND # = (1 - PD_given_D)
+    PND_given_D = ND_given_D.sum(axis=0) / total_given_D # = (1 - PND_given_ND)
+    PND_given_ND = ND_given_ND.sum(axis=0) / total_given_ND 
+    
     PD_given_D + PD_given_ND + PND_given_D + PND_given_ND
     PD_dict = {'PD_given_D':PD_given_D, 
                'PD_given_ND':PD_given_ND, 
@@ -144,8 +183,9 @@ def temporal_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND):
 
 
 
-
 #### BAYESIAN
+
+""" This is where a HMM could come in - classify customers into credit buckets for conditional PDs """
 
 ## TO DO
 
