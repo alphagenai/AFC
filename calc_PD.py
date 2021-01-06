@@ -5,15 +5,20 @@ Created on Tue Dec 29 00:12:12 2020
 @author: mark
 """
 
+import logging
+import sys
 
 import pandas as pd
 import numpy as np
-import logging
+import seaborn as sns
+
+from matplotlib import pyplot as plt
 
 from individual_analysis1 import create_percent_sdf
 
-import sys
-logging.basicConfig(level=logging.DEBUG, stream=sys.stdout, format='%(message)s')
+sns.set_style('white')
+
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(message)s')
 
 def main():
 
@@ -47,7 +52,7 @@ def how_many_true(df):
 def how_many(df):
     return df.count().sum()
 
-def calc_PD(monthly_sdf_pivot, point_estimate=True):
+def calc_PD(monthly_sdf_pivot, kind="point_estimate"):
     
     monthly_cumulative_percent_sdf_pivot = create_percent_sdf(monthly_sdf_pivot, cumulative=True, cohort='dec_17')
     
@@ -83,12 +88,19 @@ def calc_PD(monthly_sdf_pivot, point_estimate=True):
 
     NA_given_D = defaults.isna() & last_month_defaults # 0
     NA_given_ND = defaults.isna() & ~last_month_defaults # 523 ##FIX THIS
+    
+    logging.info('NA_given_D: {}'.format(how_many_true(NA_given_D)))
+    logging.info('NA_given_ND: {}'.format(how_many_true(NA_given_ND)))
 
     ## for completeness
     D_given_NA = defaults & last_month_defaults.isna() # 0
     ND_given_NA = ~defaults & last_month_defaults.isna() # 0 
 
-    if point_estimate:
+    logging.info('D_given_NA: {}'.format(how_many_true(D_given_NA)))
+    logging.info('ND_given_NA: {}'.format(how_many_true(ND_given_NA)))
+
+
+    if kind == "point_estimate":
         PD_dict = point_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND)
     return PD_dict
     
@@ -108,10 +120,10 @@ def point_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND):
     PND_given_D = how_many_true(ND_given_D) / total_given_D # = (1 - PND_given_ND)
     PND_given_ND = how_many_true(ND_given_ND) / total_given_ND 
 
-    logging.debug('PD_given_D : {} / {}'.format(how_many_true(D_given_D) , total_given_D))    
-    logging.debug('PD_given_ND : {} / {}'.format(how_many_true(D_given_ND) , total_given_ND))    
-    logging.debug('PND_given_D : {} / {}'.format(how_many_true(ND_given_D) , total_given_D))    
-    logging.debug('PND_given_ND : {} / {}'.format(how_many_true(ND_given_ND) , total_given_ND))    
+    logging.info('PD_given_D : {} / {}'.format(how_many_true(D_given_D) , total_given_D))    
+    logging.info('PD_given_ND : {} / {}'.format(how_many_true(D_given_ND) , total_given_ND))    
+    logging.info('PND_given_D : {} / {}'.format(how_many_true(ND_given_D) , total_given_D))    
+    logging.info('PND_given_ND : {} / {}'.format(how_many_true(ND_given_ND) , total_given_ND))    
 
    
     PD_dict = {'PD_given_D':PD_given_D, 
@@ -169,14 +181,18 @@ def counterparty_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND):
 #### BAYESIAN
 
 def label_logic(two_element_series):
+    # default & prev_default
     if two_element_series[0] & two_element_series[1]:
-        return 1
+        return "D_given_D"
+    # default & not prev_default
     if two_element_series[0] & ~two_element_series[1]:
-        return 2
+        return "D_given_ND"
+    # no default & prev_default
     if ~two_element_series[0] & two_element_series[1]:
-        return 3
+        return "ND_given_D"
+    # no default & no prev_default
     if ~two_element_series[0] & ~two_element_series[1]:
-        return 4
+        return "ND_given_ND"
     
 def prior_analysis():
     c_PD_dict = counterparty_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND)
@@ -188,39 +204,26 @@ def prior_analysis():
     tdf = tdf[['PD_given_D', 'PD_given_ND']]
     
 
-    df = df[~df.isna().any(axis=1)]
+    cdf = cdf[~cdf.isna().any(axis=1)]
     #df = df[~(df==1.).any(axis=1)]
     #df = df[~(df==0.0).any(axis=1)]
 
-    df = pd.concat([cdf[['PD_given_D', 'PD_given_ND']],
-                  tdf[['PD_given_D', 'PD_given_ND']],]
-                  axis=0)
+    df = pd.concat([cdf, tdf,], axis=0)
+        
+    plot_prior_histogram(cdf, title='Counterparty PDs')
+    plot_prior_histogram(tdf, title='Temporal PDs')
+    plot_prior_histogram(df, title='All PDs')
 
 
-    df.plot(kind='hist', bins=50)
+def plot_prior_histogram(df, title):
+    df.plot(kind='hist', bins=30, title=title)
+    plt.savefig('files\{}.png'.format(title))
 
-def bayes_PD_given_D_update(alpha, beta, label):
+    
+    
+def bayes_PD_updates(forecast_startdate, one_contract_id, defaults, last_month_defaults, 
+                     PD_given_D_alpha, PD_given_D_beta, PD_given_ND_alpha, PD_given_ND_beta):
     """ This is where a HMM could come in - classify customers into credit buckets for conditional PDs """
-
-    if outcome:
-        alpha += 1
-    else:
-        beta +=1
-
-    #PD_given_D_prior = Beta(alpha,beta)
-    #likelihood = Bernoulli(p)
-    #posterior = Beta(7+1, 5) or Beta(7,5+1)
-    
-    new_mean = alpha / (alpha+beta)
-    
-    return alpha, beta
-
-if __name__ == "__main__":
-    monthly_sdf_pivot = main()
-    #PD_dict = calc_PD(monthly_sdf_pivot)
-    
-    one_contract_id = monthly_sdf_pivot.columns[1]  # nice and switchy
-    forecast_startdate = '2019-12-31'
 
     hist_d = defaults.loc[:forecast_startdate, one_contract_id]
     hist_prev_d = last_month_defaults.loc[:forecast_startdate, one_contract_id]
@@ -230,4 +233,23 @@ if __name__ == "__main__":
     print(hist_df)
     
     labels = hist_df.apply(label_logic, axis=1)
+    counts = labels.groupby(labels).count()
     
+    PD_given_D_alpha += counts['D_given_D']
+    PD_given_D_beta += counts['ND_given_D']
+    
+    PD_given_ND_alpha += counts['D_given_ND']
+    PD_given_ND_beta += counts['ND_given_ND']
+
+if __name__ == "__main__":
+    monthly_sdf_pivot = main()
+    PD_dict = calc_PD(monthly_sdf_pivot)
+    
+    one_contract_id = monthly_sdf_pivot.columns[1]  # nice and switchy
+    forecast_startdate = '2019-12-31'
+
+    PD_given_D_alpha = 1.1
+    PD_given_D_beta = 3
+    
+    PD_given_ND_alpha = 1.1
+    PD_given_ND_beta = 3
