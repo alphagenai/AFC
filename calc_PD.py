@@ -25,7 +25,7 @@ def main():
     daily_sdf = df.groupby(['ContractId', pd.Grouper(freq='1D', level=1)]).sum()
     monthly_sdf = daily_sdf.groupby(['ContractId',pd.Grouper(freq='M', level=1)])['AmountPaid'].sum()
     monthly_sdf_pivot = monthly_sdf.unstack(0).fillna(0)
-    PD_dict = calc_PD(monthly_sdf_pivot)
+    return monthly_sdf_pivot
 
 
 def daily_default_full_timeseries():
@@ -47,7 +47,7 @@ def how_many_true(df):
 def how_many(df):
     return df.count().sum()
 
-def calc_PD(monthly_sdf_pivot, ):
+def calc_PD(monthly_sdf_pivot, point_estimate=True):
     
     monthly_cumulative_percent_sdf_pivot = create_percent_sdf(monthly_sdf_pivot, cumulative=True, cohort='dec_17')
     
@@ -88,8 +88,8 @@ def calc_PD(monthly_sdf_pivot, ):
     D_given_NA = defaults & last_month_defaults.isna() # 0
     ND_given_NA = ~defaults & last_month_defaults.isna() # 0 
 
-
-    PD_dict = point_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND)
+    if point_estimate:
+        PD_dict = point_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND)
     return PD_dict
     
 def point_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND): 
@@ -113,23 +113,7 @@ def point_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND):
     logging.debug('PND_given_D : {} / {}'.format(how_many_true(ND_given_D) , total_given_D))    
     logging.debug('PND_given_ND : {} / {}'.format(how_many_true(ND_given_ND) , total_given_ND))    
 
-
-    """    
-    ## for completeness
-    paid_off_months = fully_paid.sum().sum() # 6,407
-    P_paid_off = paid_off_months / monthly_sdf_pivot.count().sum()  ## 6,407/36,000
-    
-    
-    ## why doesnt this equal 1
-    PD_given_D + PD_given_ND + PND_given_D + PND_given_ND
-    
-    np.sum([D_given_D.sum().sum(),
-        D_given_ND.sum().sum(),
-        ND_given_D.sum().sum(),
-        ND_given_ND.sum().sum(),  # 27,593 same as Excel 
-        paid_off_months],)  #34,000 ==> 34 months ==> 2 months not included
-    """
-    
+   
     PD_dict = {'PD_given_D':PD_given_D, 
                'PD_given_ND':PD_given_ND, 
                'PND_given_D':PND_given_D, 
@@ -194,37 +178,56 @@ def label_logic(two_element_series):
     if ~two_element_series[0] & ~two_element_series[1]:
         return 4
     
+def prior_analysis():
+    c_PD_dict = counterparty_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND)
+    t_PD_dict = temporal_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND)
+
+    cdf = pd.DataFrame(c_PD_dict)
+    tdf = pd.DataFrame(t_PD_dict)
+    cdf = cdf[['PD_given_D', 'PD_given_ND']]
+    tdf = tdf[['PD_given_D', 'PD_given_ND']]
+    
+
+    df = df[~df.isna().any(axis=1)]
+    #df = df[~(df==1.).any(axis=1)]
+    #df = df[~(df==0.0).any(axis=1)]
+
+    df = pd.concat([cdf[['PD_given_D', 'PD_given_ND']],
+                  tdf[['PD_given_D', 'PD_given_ND']],]
+                  axis=0)
 
 
-def bayes_PD_update():
+    df.plot(kind='hist', bins=50)
+
+def bayes_PD_given_D_update(alpha, beta, label):
     """ This is where a HMM could come in - classify customers into credit buckets for conditional PDs """
+
+    if outcome:
+        alpha += 1
+    else:
+        beta +=1
+
+    #PD_given_D_prior = Beta(alpha,beta)
+    #likelihood = Bernoulli(p)
+    #posterior = Beta(7+1, 5) or Beta(7,5+1)
     
-    import pymc3 as pm
+    new_mean = alpha / (alpha+beta)
     
-    
-    ## TO DO
-    
-    #prior = 
-    
-    one_contract_id = monthly_sdf_pivot.columns[3]
-    default_ts = defaults.loc[:,one_contract_id]
-    lmd_ts = last_month_defaults.loc[:,one_contract_id]
-    
-    df = pd.concat([default_ts, lmd_ts], axis=1)
-    
-    y = df.apply(label_logic, axis=1)
-    
-    k = 4
-    n = len(y)
-    
-    with pm.Model() as conditional_default_model:
-        
-        # initializes the Dirichlet distribution with a uniform prior:
-        a = np.ones(k) 
-        
-        theta = pm.Dirichlet("theta", a=a)
-            
-        results = pm.Multinomial("results", n=n, p=theta, observed=y)
+    return alpha, beta
 
 if __name__ == "__main__":
-    main()
+    monthly_sdf_pivot = main()
+    #PD_dict = calc_PD(monthly_sdf_pivot)
+    
+    one_contract_id = monthly_sdf_pivot.columns[1]  # nice and switchy
+    forecast_startdate = '2019-12-31'
+
+    hist_d = defaults.loc[:forecast_startdate, one_contract_id]
+    hist_prev_d = last_month_defaults.loc[:forecast_startdate, one_contract_id]
+
+    hist_df = pd.concat([hist_d, hist_prev_d], axis=1)    
+
+    print(hist_df)
+    
+    labels = hist_df.apply(label_logic, axis=1)
+    
