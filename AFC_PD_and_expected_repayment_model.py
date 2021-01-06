@@ -14,7 +14,7 @@ from matplotlib import pyplot as plt
 
 from calc_PD import calc_PD
 from monthly_averages import calc_moving_average
-
+from individual_analysis1 import create_percent_sdf
 
 
 
@@ -55,10 +55,11 @@ def label(x, color, label):
 class LatticeModel(object):
     """ TO DO: ENSURE TOTAL PAYMENTS DO NOT GO OVER 100% """
     def __init__(self, initial_payment, average_payment, 
-                 contract_id, PD_dict):
+                 contract_id, forecast_startdate, PD_dict):
         self.initial_payment = initial_payment
         self.average_payment = average_payment
         self.contract_id = contract_id
+        self.forecast_startdate = forecast_startdate
         self.PD_dict=PD_dict
 
         if initial_payment:
@@ -71,7 +72,9 @@ class LatticeModel(object):
         self.nodes_dict = {0:[initial_node,]}            
 
     def add_level(self,):
-        """ create a new set of nodes for the next timepoint """
+        """ create a new set of nodes for the next timepoint 
+            TO DO: Engineering problem of how to combine nodes with same value
+        """
         t = max(self.nodes_dict.keys())
         new_nodes = []
         for node in self.nodes_dict[t]:
@@ -92,7 +95,8 @@ class LatticeModel(object):
         
         # Initialize the FacetGrid object
         pal = sns.cubehelix_palette(10, rot=-.25, light=.7)
-        g = sns.FacetGrid(df, row="t", hue="t", aspect=15, height=.5, palette=pal)
+        g = sns.FacetGrid(df, row="t", hue="t", aspect=15, height=.5, palette=pal,
+                          row_order=df['t'].unique()[::-1])
         
             
         # Draw the densities in a few steps
@@ -114,7 +118,13 @@ class LatticeModel(object):
         # Remove axes details that don't play well with overlap
         g.set_titles("")
         g.set(yticks=[])
-        g.despine(bottom=True, left=True)        
+        g.despine(bottom=True, left=True)
+        g.axes[-1][0].set_xlabel('Cumulative Value')
+        g.axes[3][0].set_ylabel('Time')
+        title = 'forecast for {} at {}'.format(self.contract_id, self.forecast_startdate)
+        plt.subplots_adjust(top=0.9)
+        g.fig.suptitle(title)
+        plt.savefig('files\\'+title)
         
         
 if __name__ == "__main__":
@@ -141,14 +151,37 @@ if __name__ == "__main__":
 
     
     average_payment = one_ma[forecast_startdate]
-    initial_payment = monthly_sdf_pivot.loc[forecast_startdate, one_contract_id] #bool
+    initial_payment = monthly_sdf_pivot.loc[forecast_startdate, one_contract_id] 
+    
+    
 
-
-    lm = LatticeModel(initial_payment=0, average_payment=average_payment, 
-                      contract_id=one_contract_id, PD_dict=PD_dict)
+    lm = LatticeModel(initial_payment, average_payment=average_payment, 
+                      contract_id=one_contract_id, forecast_startdate=forecast_startdate, 
+                      PD_dict=PD_dict)
     
     for t in range(7):
         lm.add_level()
     
     lm.plot_forecasts(6)
     print(lm._df)
+    
+    fig, ax = plt.subplots()
+    title = 'Realised Cumulative Payments'
+    actual = monthly_sdf_pivot.loc[
+        forecast_startdate:pd.Timestamp(forecast_startdate)+pd.DateOffset(months=5), one_contract_id
+                                   ].cumsum()
+    ax = actual.plot(ax=ax,title = title)
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Cumulative Value')
+    plt.title(title)
+    plt.savefig('files\\'+title)
+        
+    
+    
+def plot_forecasts(tss, forecasts, past_length, num_plots):
+    for target, forecast in islice(zip(tss, forecasts), num_plots):
+        ax = target[-past_length:].plot(figsize=(12, 5), linewidth=2)
+        forecast.plot(color='g')
+        plt.grid(which='both')
+        plt.legend(["observations", "median prediction", "90% confidence interval", "50% confidence interval"])
+        plt.show()
