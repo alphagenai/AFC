@@ -52,148 +52,214 @@ def how_many_true(df):
 def how_many(df):
     return df.count().sum()
 
-def calc_PD(monthly_sdf_pivot, kind="point_estimate"):
+class PDCalculator(object):
+    """ TO DO: ADD BAYES TO THIS CLASS """
+    def __init__(self,monthly_sdf_pivot,):
+        self._point_estimate = None
+        self._temporal_estimate = None
+        self._counterparty_estimate = None
+        self.PD_dict = {}
+        self._monthly_sdf_pivot = monthly_sdf_pivot
+
+    def data_prep(self, monthly_sdf_pivot):
+        monthly_cumulative_percent_sdf_pivot = create_percent_sdf(monthly_sdf_pivot, cumulative=True, cohort='dec_17')
+        self._monthly_cumulative_percent_sdf_pivot = monthly_cumulative_percent_sdf_pivot
+        
+        defaults = (monthly_sdf_pivot==0).astype('boolean') # total non-NaN: 36,000 incl Dec; 28,593 incl. Jan 18
+        paid  = (monthly_sdf_pivot!=0).astype('boolean')
+        fully_paid = monthly_cumulative_percent_sdf_pivot.shift(1) >= 0.99 #final payment is not included in fully paid flag
+        
+        ## completed contracts are converted to NaN
+        defaults = defaults.mask(fully_paid).astype('boolean')
+        paid  = paid.mask(fully_paid).astype('boolean')
+        
+        #individual_uncond_PD = defaults.sum(axis=0, skipna=True)/defaults.count(axis=0)  #df.count() does not count NaNs
+        #unconditional_PD = defaults.sum(axis=0, skipna=True).sum()/defaults.count(axis=0).sum()
+        
+        last_month_defaults = defaults.shift(1)
     
-    monthly_cumulative_percent_sdf_pivot = create_percent_sdf(monthly_sdf_pivot, cumulative=True, cohort='dec_17')
+        ## ignore first 2 months as cannot default in origination month
+        defaults = defaults.iloc[2:]  # 3,372 defaults in 28,214 total 
+        last_month_defaults = last_month_defaults.iloc[2:]  #28,647
+        paid = paid.iloc[2:] #24,752 of 28,124
+        
+        self._defaults = defaults
+        self._last_month_defaults = last_month_defaults
+        
+        return defaults, last_month_defaults
+
+    def calc_PD(self, monthly_sdf_pivot, kind="point_estimate"):
+        
+        defaults, last_month_defaults = self.data_prep(monthly_sdf_pivot)
+        
+        """ TO DO: FIX THIS: """
+        ### REMEMBER FALSE & NA = FALSE!!
+        D_given_D = defaults & last_month_defaults  # 2,233 events
+        D_given_ND = defaults & ~last_month_defaults # 1,139
+        
+        ND_given_D = ~defaults & last_month_defaults # 1,073
+        ND_given_ND = ~defaults & ~last_month_defaults # 23,679
     
+        NA_given_D = defaults.isna() & last_month_defaults # 0
+        NA_given_ND = defaults.isna() & ~last_month_defaults # 523 ##FIX THIS
+        
+        logging.info('NA_given_D: {}'.format(how_many_true(NA_given_D)))
+        logging.info('NA_given_ND: {}'.format(how_many_true(NA_given_ND)))
+    
+        ## for completeness
+        D_given_NA = defaults & last_month_defaults.isna() # 0
+        ND_given_NA = ~defaults & last_month_defaults.isna() # 0 
+    
+        logging.info('D_given_NA: {}'.format(how_many_true(D_given_NA)))
+        logging.info('ND_given_NA: {}'.format(how_many_true(ND_given_NA)))
+    
+    
+        if kind == "point_estimate":
+            PD_dict = self.point_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND)
+        self.PD_dict = PD_dict
+        return PD_dict
+        
 
     ## 1) MONTH OF DEFAULT DOES NOT MATTER
     
+
+    def point_estimate(self, D_given_D, D_given_ND, ND_given_D, ND_given_ND): 
     
-    defaults = (monthly_sdf_pivot==0).astype('boolean') # total non-NaN: 36,000 incl Dec; 28,593 incl. Jan 18
-    paid  = (monthly_sdf_pivot!=0).astype('boolean')
-    fully_paid = monthly_cumulative_percent_sdf_pivot.shift(1) >= 0.99 #final payment is not included in fully paid flag
+        total_given_D = how_many_true(D_given_D) + how_many_true(ND_given_D)
+        total_given_ND = how_many_true(D_given_ND) + how_many_true(ND_given_ND)
     
-    ## completed contracts are converted to NaN
-    defaults = defaults.mask(fully_paid).astype('boolean')
-    paid  = paid.mask(fully_paid).astype('boolean')
+        PD_given_D = how_many_true(D_given_D) / total_given_D 
+        PD_given_ND = how_many_true(D_given_ND) / total_given_ND # = (1 - PD_given_D)
+        PND_given_D = how_many_true(ND_given_D) / total_given_D # = (1 - PND_given_ND)
+        PND_given_ND = how_many_true(ND_given_ND) / total_given_ND 
     
-    #individual_uncond_PD = defaults.sum(axis=0, skipna=True)/defaults.count(axis=0)  #df.count() does not count NaNs
-    #unconditional_PD = defaults.sum(axis=0, skipna=True).sum()/defaults.count(axis=0).sum()
+        logging.info('PD_given_D : {} / {}'.format(how_many_true(D_given_D) , total_given_D))    
+        logging.info('PD_given_ND : {} / {}'.format(how_many_true(D_given_ND) , total_given_ND))    
+        logging.info('PND_given_D : {} / {}'.format(how_many_true(ND_given_D) , total_given_D))    
+        logging.info('PND_given_ND : {} / {}'.format(how_many_true(ND_given_ND) , total_given_ND))    
     
-    last_month_defaults = defaults.shift(1)
-
-    ## ignore first 2 months as cannot default in origination month
-    defaults = defaults.iloc[2:]  # 3,372 defaults in 28,214 total 
-    last_month_defaults = last_month_defaults.iloc[2:]  #28,647
-    paid = paid.iloc[2:] #24,752 of 28,124
-
-    """ TO DO: FIX THIS: """
-    ### REMEMBER FALSE & NA = FALSE!!
-    D_given_D = defaults & last_month_defaults  # 2,233 events
-    D_given_ND = defaults & ~last_month_defaults # 1,139
-    
-    ND_given_D = ~defaults & last_month_defaults # 1,073
-    ND_given_ND = ~defaults & ~last_month_defaults # 23,679
-
-    NA_given_D = defaults.isna() & last_month_defaults # 0
-    NA_given_ND = defaults.isna() & ~last_month_defaults # 523 ##FIX THIS
-    
-    logging.info('NA_given_D: {}'.format(how_many_true(NA_given_D)))
-    logging.info('NA_given_ND: {}'.format(how_many_true(NA_given_ND)))
-
-    ## for completeness
-    D_given_NA = defaults & last_month_defaults.isna() # 0
-    ND_given_NA = ~defaults & last_month_defaults.isna() # 0 
-
-    logging.info('D_given_NA: {}'.format(how_many_true(D_given_NA)))
-    logging.info('ND_given_NA: {}'.format(how_many_true(ND_given_NA)))
-
-
-    if kind == "point_estimate":
-        PD_dict = point_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND)
-    return PD_dict
-    
-def point_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND): 
-    # PD_given_D = D_given_D.sum().sum() / D_given_D.count().sum()  #2,233/28,647
-    # PD_given_ND = D_given_ND.sum().sum() / D_given_ND.count().sum() # 1,139/28,124
-    
-    # PND_given_D = ND_given_D.sum().sum() / ND_given_D.count().sum() #1,060/28,647
-    # PND_given_ND = ND_given_ND.sum().sum() / ND_given_ND.count().sum()  #23,161/28,124
-    ## Total from Excel: 27,593
-
-    total_given_D = how_many_true(D_given_D) + how_many_true(ND_given_D)
-    total_given_ND = how_many_true(D_given_ND) + how_many_true(ND_given_ND)
-
-    PD_given_D = how_many_true(D_given_D) / total_given_D 
-    PD_given_ND = how_many_true(D_given_ND) / total_given_ND # = (1 - PD_given_D)
-    PND_given_D = how_many_true(ND_given_D) / total_given_D # = (1 - PND_given_ND)
-    PND_given_ND = how_many_true(ND_given_ND) / total_given_ND 
-
-    logging.info('PD_given_D : {} / {}'.format(how_many_true(D_given_D) , total_given_D))    
-    logging.info('PD_given_ND : {} / {}'.format(how_many_true(D_given_ND) , total_given_ND))    
-    logging.info('PND_given_D : {} / {}'.format(how_many_true(ND_given_D) , total_given_D))    
-    logging.info('PND_given_ND : {} / {}'.format(how_many_true(ND_given_ND) , total_given_ND))    
-
-   
-    PD_dict = {'PD_given_D':PD_given_D, 
-               'PD_given_ND':PD_given_ND, 
-               'PND_given_D':PND_given_D, 
-               'PND_given_ND':PND_given_ND,
-               }
-    return PD_dict
-    
+       
+        PD_dict = {'PD_given_D':PD_given_D, 
+                   'PD_given_ND':PD_given_ND, 
+                   'PND_given_D':PND_given_D, 
+                   'PND_given_ND':PND_given_ND,
+                   }
+        self.PD_dict = PD_dict ## TO DO: Diferentiate between the different types of PD
+        return PD_dict
+        
     ## 2) MONTH MATTERS
     
-def temporal_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND):
-
-    total_given_D = D_given_D.sum(axis=1) + ND_given_D.sum(axis=1)
-    total_given_ND = D_given_ND.sum(axis=1) + ND_given_ND.sum(axis=1)
-
+    def temporal_estimate(self, D_given_D, D_given_ND, ND_given_D, ND_given_ND):
     
-
-    PD_given_D = D_given_D.sum(axis=1) / total_given_D 
-    PD_given_ND = D_given_ND.sum(axis=1) / total_given_ND # = (1 - PD_given_D)
-    PND_given_D = ND_given_D.sum(axis=1) / total_given_D # = (1 - PND_given_ND)
-    PND_given_ND = ND_given_ND.sum(axis=1) / total_given_ND 
+        total_given_D = D_given_D.sum(axis=1) + ND_given_D.sum(axis=1)
+        total_given_ND = D_given_ND.sum(axis=1) + ND_given_ND.sum(axis=1)
     
-    PD_given_D + PD_given_ND + PND_given_D + PND_given_ND
-    PD_dict = {'PD_given_D':PD_given_D, 
-               'PD_given_ND':PD_given_ND, 
-               'PND_given_D':PND_given_D, 
-               'PND_given_ND':PND_given_ND,
-               }
-    return PD_dict
-
-
-def counterparty_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND):
-
-    total_given_D = D_given_D.sum(axis=0) + ND_given_D.sum(axis=0)
-    total_given_ND = D_given_ND.sum(axis=0) + ND_given_ND.sum(axis=0)
-
+        
     
-
-    PD_given_D = D_given_D.sum(axis=0) / total_given_D 
-    PD_given_ND = D_given_ND.sum(axis=0) / total_given_ND # = (1 - PD_given_D)
-    PND_given_D = ND_given_D.sum(axis=0) / total_given_D # = (1 - PND_given_ND)
-    PND_given_ND = ND_given_ND.sum(axis=0) / total_given_ND 
+        PD_given_D = D_given_D.sum(axis=1) / total_given_D 
+        PD_given_ND = D_given_ND.sum(axis=1) / total_given_ND # = (1 - PD_given_D)
+        PND_given_D = ND_given_D.sum(axis=1) / total_given_D # = (1 - PND_given_ND)
+        PND_given_ND = ND_given_ND.sum(axis=1) / total_given_ND 
+        
+        PD_given_D + PD_given_ND + PND_given_D + PND_given_ND
+        PD_dict = {'PD_given_D':PD_given_D, 
+                   'PD_given_ND':PD_given_ND, 
+                   'PND_given_D':PND_given_D, 
+                   'PND_given_ND':PND_given_ND,
+                   }
+        self.PD_dict = PD_dict ## TO DO: Diferentiate between the different types of PD
+        return PD_dict
     
-    PD_given_D + PD_given_ND + PND_given_D + PND_given_ND
-    PD_dict = {'PD_given_D':PD_given_D, 
-               'PD_given_ND':PD_given_ND, 
-               'PND_given_D':PND_given_D, 
-               'PND_given_ND':PND_given_ND,
-               }
-    return PD_dict
+        ## 3) COUNTERPARTY MATTERS
+        
+
+    def counterparty_estimate(self, D_given_D, D_given_ND, ND_given_D, ND_given_ND):
+    
+        total_given_D = D_given_D.sum(axis=0) + ND_given_D.sum(axis=0)
+        total_given_ND = D_given_ND.sum(axis=0) + ND_given_ND.sum(axis=0)
+    
+        
+    
+        PD_given_D = D_given_D.sum(axis=0) / total_given_D 
+        PD_given_ND = D_given_ND.sum(axis=0) / total_given_ND # = (1 - PD_given_D)
+        PND_given_D = ND_given_D.sum(axis=0) / total_given_D # = (1 - PND_given_ND)
+        PND_given_ND = ND_given_ND.sum(axis=0) / total_given_ND 
+        
+        PD_given_D + PD_given_ND + PND_given_D + PND_given_ND
+        PD_dict = {'PD_given_D':PD_given_D, 
+                   'PD_given_ND':PD_given_ND, 
+                   'PND_given_D':PND_given_D, 
+                   'PND_given_ND':PND_given_ND,
+                   }
+        self.PD_dict = PD_dict ## TO DO: Diferentiate between the different types of PD
+        return PD_dict
 
 
 
 #### BAYESIAN
 
-def label_logic(two_element_series):
-    # default & prev_default
-    if two_element_series[0] & two_element_series[1]:
-        return "D_given_D"
-    # default & not prev_default
-    if two_element_series[0] & ~two_element_series[1]:
-        return "D_given_ND"
-    # no default & prev_default
-    if ~two_element_series[0] & two_element_series[1]:
-        return "ND_given_D"
-    # no default & no prev_default
-    if ~two_element_series[0] & ~two_element_series[1]:
-        return "ND_given_ND"
+class BayesianPDUpdater(object):
+    def __init__(self, initial_params):
+        self._parameter_dict = initial_params
+        
+    def update_logic(self, two_element_series,):
+        # default & prev_default
+        if two_element_series[0] & two_element_series[1]:
+            self._parameter_dict["PD_given_D_alpha"] += 1
+        # default & not prev_default
+        elif two_element_series[0] & ~two_element_series[1]:
+            self._parameter_dict["PD_given_ND_alpha"] += 1
+        # no default & prev_default
+        elif ~two_element_series[0] & two_element_series[1]:
+            self._parameter_dict["PD_given_D_beta"] += 1
+        # no default & no prev_default
+        elif ~two_element_series[0] & ~two_element_series[1]:
+            self._parameter_dict["PD_given_ND_beta"] += 1
     
+    def Update_PD(self, hist_df):
+        hist_df.apply(self.update_logic, axis=1)
+    
+def bayes_PD_updates(forecast_startdate, one_contract_id, defaults, last_month_defaults, 
+                     PD_given_D_alpha, PD_given_D_beta, PD_given_ND_alpha, PD_given_ND_beta):
+    """ This is where a HMM could come in - classify customers into credit buckets for conditional PDs """
+
+    hist_d = defaults.loc[:forecast_startdate, one_contract_id]
+    hist_prev_d = last_month_defaults.loc[:forecast_startdate, one_contract_id]
+
+    hist_df = pd.concat([hist_d, hist_prev_d], axis=1)    
+
+    print(hist_df)
+    
+    labels = hist_df.apply(label_logic, axis=1, parameter_dict=_parameter_dict)
+    counts = labels.groupby(labels).count()
+
+    empcounts = pd.Series(data=[0,0,0,0], index=[['D_given_D',
+                                               'ND_given_D',
+                                               'D_given_ND',
+                                               'ND_given_ND',]])
+    empcounts += counts
+
+    empcounts.add(counts, fill_value=0)
+    
+    PD_given_D_alpha += counts['D_given_D']
+    PD_given_D_beta += counts['ND_given_D']
+    
+    PD_given_ND_alpha += counts['D_given_ND']
+    PD_given_ND_beta += counts['ND_given_ND']
+    
+    parameter_dict = {'PD_given_D_alpha':PD_given_D_alpha,
+                      'PD_given_D_beta':PD_given_D_beta,
+                      'PD_given_ND_alpha':PD_given_ND_alpha,
+                      'PD_given_ND_beta':PD_given_ND_beta,
+                      }
+    return parameter_dict
+
+    def calc_mean(self):
+        mean = self._parameter_dict['PD_given_D_alpha'] / (
+            self._parameter_dict['PD_given_D_alpha'] + self._parameter_dict['PD_given_D_beta'])
+
+
+
 def prior_analysis():
     c_PD_dict = counterparty_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND)
     t_PD_dict = temporal_estimate(D_given_D, D_given_ND, ND_given_D, ND_given_ND)
@@ -204,7 +270,7 @@ def prior_analysis():
     tdf = tdf[['PD_given_D', 'PD_given_ND']]
     
 
-    cdf = cdf[~cdf.isna().any(axis=1)]
+    cdf = cdf[~cdf.isna().any(axis=1)]  ## Look into WHY we get these
     #df = df[~(df==1.).any(axis=1)]
     #df = df[~(df==0.0).any(axis=1)]
 
@@ -219,37 +285,55 @@ def plot_prior_histogram(df, title):
     df.plot(kind='hist', bins=30, title=title)
     plt.savefig('files\{}.png'.format(title))
 
-    
-    
-def bayes_PD_updates(forecast_startdate, one_contract_id, defaults, last_month_defaults, 
-                     PD_given_D_alpha, PD_given_D_beta, PD_given_ND_alpha, PD_given_ND_beta):
-    """ This is where a HMM could come in - classify customers into credit buckets for conditional PDs """
+def plot_beta(a, b):
+    x = np.arange (0, 1, 0.01)
+    y = beta.pdf(x,a,b, )
+    plt.plot(x,y)
+        
 
-    hist_d = defaults.loc[:forecast_startdate, one_contract_id]
-    hist_prev_d = last_month_defaults.loc[:forecast_startdate, one_contract_id]
-
-    hist_df = pd.concat([hist_d, hist_prev_d], axis=1)    
-
-    print(hist_df)
-    
-    labels = hist_df.apply(label_logic, axis=1)
-    counts = labels.groupby(labels).count()
-    
-    PD_given_D_alpha += counts['D_given_D']
-    PD_given_D_beta += counts['ND_given_D']
-    
-    PD_given_ND_alpha += counts['D_given_ND']
-    PD_given_ND_beta += counts['ND_given_ND']
 
 if __name__ == "__main__":
+    from scipy.stats import beta
+
     monthly_sdf_pivot = main()
-    PD_dict = calc_PD(monthly_sdf_pivot)
+    pd_calc = PDCalculator(monthly_sdf_pivot)
+    PD_dict = pd_calc.calc_PD(monthly_sdf_pivot)
     
     one_contract_id = monthly_sdf_pivot.columns[1]  # nice and switchy
+    #one_contract_id = monthly_sdf_pivot.columns[3]  # same as lattice
+    #one_contract_id = monthly_sdf_pivot.columns[0]  # lots of defaults
+
     forecast_startdate = '2019-12-31'
 
-    PD_given_D_alpha = 1.1
-    PD_given_D_beta = 3
+
+    hist_d = pd_calc._defaults.loc[:forecast_startdate, one_contract_id]
+    hist_prev_d = pd_calc._last_month_defaults.loc[:forecast_startdate, one_contract_id]
+
+    hist_df = pd.concat([hist_d, hist_prev_d], axis=1)    
     
-    PD_given_ND_alpha = 1.1
-    PD_given_ND_beta = 3
+    initial_params = {'PD_given_D_alpha':1.1,
+                      'PD_given_D_beta':6,
+                      'PD_given_ND_alpha':1.1,
+                      'PD_given_ND_beta':3,
+                      }
+    
+    bpdu = BayesianPDUpdater(initial_params)
+    bpdu.Update_PD(hist_df)
+    
+    print(bpdu._parameter_dict)
+
+    # parameter_dict = bayes_PD_updates(forecast_startdate, one_contract_id, 
+    #                                   pd_calc._defaults, pd_calc._last_month_defaults, 
+    #                                   PD_given_D_alpha, PD_given_D_beta, PD_given_ND_alpha, 
+    #                                   PD_given_ND_beta)
+    
+
+
+    plot_beta(bpdu._parameter_dict['PD_given_D_alpha'], 
+                   bpdu._parameter_dict['PD_given_D_beta'])
+
+    plot_beta(bpdu._parameter_dict['PD_given_ND_alpha'], 
+                   bpdu._parameter_dict['PD_given_ND_beta'])
+
+
+
