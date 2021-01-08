@@ -8,8 +8,6 @@ Created on Fri Jan  8 11:02:22 2021
 
 import seaborn as sns
 
-monthly_sdf_pivot.corr()
-
 mycorr = monthly_sdf_pivot.corr()
 sns.heatmap(mycorr)
 mycorr > 0.8
@@ -21,3 +19,10 @@ monthly_sdf_pivot.loc[:,highest_corr.index]
 monthly_sdf_pivot.loc[:,highest_corr.index].to_csv('high_correlation.csv')
 high_corr_ts = monthly_sdf_pivot.loc[:,highest_corr.index]
 high_corr_ts.cumsum(axis=0).plot()
+
+
+### I THINK WHAT WE REALLY WANT IS STATE (aka default) CORRELATION
+
+no_NAs = pd_calc._defaults.fillna(False)
+mycorr = no_NAs.corr()
+no_NAs.loc[:,mycorr.isna().all()]  # NAs are all false
