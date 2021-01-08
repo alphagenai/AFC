@@ -19,7 +19,7 @@ df = pd.read_pickle('files\\small_df_1000_dec_17.pkl')
 df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:%S').dt.tz_localize(None)
 df = df.groupby(['ContractId', 'TransactionTS']).sum()
 daily_sdf = df.groupby(['ContractId', pd.Grouper(freq='1D', level=1)]).sum()
-daily_sdf_pivot = daily_sdf['AmountPaid'].unstack(0).fillna(0)
+daily_sdf_pivot = daily_sdf['AmountPaid'].unstack(0).fillna(0).sort_index()
 
 daily_sdf_fullts = calculate_days_dropped(daily_sdf)
 
@@ -54,25 +54,36 @@ def plot_elec_clusters(one_contract_id=None):
         i = random.randint(0,1000)
         one_contract_id = no_elec.columns[i]
     
-    hist_no_e = no_elec.loc[:forecast_startdate, one_contract_id]
+    hist_e = ~no_elec.loc[:forecast_startdate, one_contract_id]
 
     fig, ax = plt.subplots(1,2)
-    hist_no_e.astype(float).plot(ax=ax[0])
+    hist_e.astype(float).plot(ax=ax[0])
     ax[0].set_title("Electricity Clustering")
     ax[0].set_xlabel("")
 
-    unconditional = hist_no_e.groupby(hist_no_e).count()
-    plot_beta(unconditional[False], unconditional[True], ax=ax[1])
+    unconditional = hist_e.groupby(hist_e).count()
+    plot_beta(unconditional[True], unconditional[False], ax=ax[1])
     ax[1].set_title("Probability of Electricity")
     
-    plt.savefig('Electricity Clustering for {}.png'.format(one_contract_id))
+    plt.savefig('files\\Electricity Clustering for {}.png'.format(one_contract_id))
     return one_contract_id
 
 interesting_contracts = ['1352353',
-                         '1358791',]
+                         '1358791',
+                         '1349722',  # same as lattice
+                         '1349768', '1349968', '1350061', '1350103', '1350357',  # defaulters
+                         ]
 
 for cid in interesting_contracts:
     plot_elec_clusters(cid)
+
+defaulters = default[default].iloc[10:30].index
+
+for cid in defaulters:
+    try:
+        plot_elec_clusters(cid)
+    except KeyError:
+        print("There were no examples of True")
 
 hist_no_e = no_elec.loc[:forecast_startdate, one_contract_id]
 hist_yest = no_elec_yesterday.loc[:forecast_startdate, one_contract_id]
