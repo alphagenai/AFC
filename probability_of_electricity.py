@@ -65,29 +65,46 @@ def plot_elec_clusters(one_contract_id=None):
     plot_beta(unconditional[True], unconditional[False], ax=ax[1])
     ax[1].set_title("Probability of Electricity")
     
+    plt.suptitle(one_contract_id)
     plt.savefig('files\\Electricity Clustering for {}.png'.format(one_contract_id))
     return one_contract_id
 
-interesting_contracts = ['1352353',
-                         '1358791',
-                         '1349722',  # same as lattice
-                         '1349768', '1349968', '1350061', '1350103', '1350357',  # defaulters
-                         ]
-
-for cid in interesting_contracts:
-    plot_elec_clusters(cid)
-
-defaulters = default[default].iloc[10:30].index
-
-for cid in defaulters:
-    try:
+def all_plots():
+    interesting_contracts = ['1352353',
+                             '1358791',
+                             '1349722',  # same as lattice
+                             '1349768', '1349968', '1350061', '1350103', '1350357',  # defaulters
+                             ]
+    
+    for cid in interesting_contracts:
         plot_elec_clusters(cid)
-    except KeyError:
-        print("There were no examples of True")
+    
+    defaulters = default[default].iloc[10:30].index
+    
+    for cid in defaulters:
+        try:
+            plot_elec_clusters(cid)
+        except KeyError:
+            print("There were no examples of True")
 
-hist_no_e = no_elec.loc[:forecast_startdate, one_contract_id]
-hist_yest = no_elec_yesterday.loc[:forecast_startdate, one_contract_id]
+# hist_no_e = no_elec.loc[:forecast_startdate, one_contract_id]
+# hist_yest = no_elec_yesterday.loc[:forecast_startdate, one_contract_id]
 
-hist_df = pd.concat([hist_no_e, hist_yest], axis=1)    
+# hist_df = pd.concat([hist_no_e, hist_yest], axis=1)    
+
+########## TRANSITION PROBABILITIES FROM PAR30 STATE
+
+par30_daily_pivot = daily_sdf_fullts['PAR30+'].unstack(0).sort_index()
 
 
+## completed contracts are converted to NaN
+## be careful that the start and end dates of both dataframes is the same
+fully_paid = daily_cumulative_percent_sdf_pivot.shift(1) >= 0.80 #final payment is not included in fully paid flag
+par30_daily_pivot = par30_daily_pivot.mask(fully_paid).astype('boolean')
+
+daily_cumulative_percent_sdf_pivot.loc[:,par30_daily_pivot.any(axis=0)].plot()
+daily_cumulative_percent_sdf_pivot.loc[:,par30_daily_pivot.any(axis=0)].to_csv('PAR30_examples.csv')
+par30_daily_pivot.loc[:, par30_daily_pivot.any(axis=0)].to_csv('Par_30_examples2.csv')
+
+## seems right
+#daily_cumulative_percent_sdf_pivot.loc['June-2018':'Aug-2018','1349716'].plot()
