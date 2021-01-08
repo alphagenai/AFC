@@ -71,7 +71,8 @@ def create_boolean_categories(cumulative_percent_sdf):
 
 if __name__ == "__main__":
     
-    small_df = create_small_df(size=1000, cohort='dec_17')
+    #small_df = create_small_df(size=1000, cohort='dec_17')
+    small_df = pd.read_pickle('files\\small_df_1000_dec_17.pkl')
     daily_sdf_pivot = convert_to_daily_pivot(small_df)
     cumulative_percent_sdf = create_percent_sdf(daily_sdf_pivot, cumulative=True, cohort='dec_17')
     cumulative_amount_sdf = daily_sdf_pivot.cumsum(axis=0)

@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
 
     daily_sdf_fullts = calculate_days_dropped(daily_sdf)
-    daily_sdf_fullts.to_csv('temp2.csv')
+    daily_sdf_fullts.to_csv('daily_full_timeseries.csv')
 
 
 

@@ -12,7 +12,7 @@ import seaborn as sns
 from scipy.stats import binom
 from matplotlib import pyplot as plt
 
-from calc_PD import calc_PD
+from calc_PD import PDCalculator
 from monthly_averages import calc_moving_average
 from individual_analysis1 import create_percent_sdf
 
@@ -136,16 +136,18 @@ if __name__ == "__main__":
     monthly_sdf = df.groupby(['ContractId',pd.Grouper(key='TransactionTS', freq='M',)])['AmountPaid'].sum()
     monthly_sdf_pivot = monthly_sdf.unstack(0).fillna(0)
     
-    
-    PD_dict = calc_PD(monthly_sdf_pivot,)
+    pd_calc = PDCalculator(monthly_sdf_pivot)
+    PD_dict = pd_calc.calc_PD(monthly_sdf_pivot)
+
     monthly_sdf_fullts = calc_moving_average(monthly_sdf)
     
     ma_pivot = monthly_sdf_fullts['MovingAverage'].unstack(0).shift(1).fillna(method='ffill') #shift(1) for next month forecast, ffill for future months with no MA (because no payments made)
     
 
-    one_contract_id = monthly_sdf_pivot.columns[3]
+    one_contract_id = monthly_sdf_pivot.columns[3]  # original example
+    one_contract_id = monthly_sdf_pivot.columns[8]  # someone new
     one_ma = ma_pivot[one_contract_id]
-    forecast_startdate = '2019-12-31'
+    forecast_startdate = '2019-6-30'
     
     forecast_dates = monthly_sdf_pivot[forecast_startdate:].index
 
