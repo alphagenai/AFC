@@ -108,3 +108,19 @@ par30_daily_pivot.loc[:, par30_daily_pivot.any(axis=0)].to_csv('Par_30_examples2
 
 ## seems right
 #daily_cumulative_percent_sdf_pivot.loc['June-2018':'Aug-2018','1349716'].plot()
+
+unconditional_daily_PE = par30_daily_pivot.sum().sum() / par30_daily_pivot.count().sum() 
+
+par30_yesterday_pivot = par30_daily_pivot.shift(1)
+
+transition_to_par30 = ~par30_yesterday_pivot & par30_daily_pivot 
+transition_from_par30 = par30_yesterday_pivot & ~par30_daily_pivot 
+
+transition_df = pd.concat([transition_to_par30.sum(), transition_from_par30.sum()], axis=1) #.to_csv('transition_probs.csv')
+
+recovery = (transition_df[0] == transition_df[1])
+recovery.sum() / recovery.count()
+
+""" TO DO: investigate sequences of par30 and how long they tend to be. 
+hypothesis: the longer the par30, the less likely the recovery
+"""
