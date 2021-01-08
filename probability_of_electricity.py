@@ -5,9 +5,15 @@ Created on Thu Jan  7 15:36:22 2021
 @author: mark
 """
 
+import random
+import pandas as pd
+import numpy as np
+
+from matplotlib import pyplot as plt
+
 from calculate_days_dropped import calculate_days_dropped
 from individual_analysis1 import create_percent_sdf
-
+from calc_PD import plot_beta
 
 df = pd.read_pickle('files\\small_df_1000_dec_17.pkl')
 df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:%S').dt.tz_localize(None)
@@ -42,8 +48,35 @@ one_contract_id = no_elec.columns[0]  # lots of defaults
 
 forecast_startdate = '2019-12-31'
 
+
+def plot_elec_clusters(one_contract_id=None):
+    if one_contract_id is None:
+        i = random.randint(0,1000)
+        one_contract_id = no_elec.columns[i]
+    
+    hist_no_e = no_elec.loc[:forecast_startdate, one_contract_id]
+
+    fig, ax = plt.subplots(1,2)
+    hist_no_e.astype(float).plot(ax=ax[0])
+    ax[0].set_title("Electricity Clustering")
+    ax[0].set_xlabel("")
+
+    unconditional = hist_no_e.groupby(hist_no_e).count()
+    plot_beta(unconditional[False], unconditional[True], ax=ax[1])
+    ax[1].set_title("Probability of Electricity")
+    
+    plt.savefig('Electricity Clustering for {}.png'.format(one_contract_id))
+    return one_contract_id
+
+interesting_contracts = ['1352353',
+                         '1358791',]
+
+for cid in interesting_contracts:
+    plot_elec_clusters(cid)
+
 hist_no_e = no_elec.loc[:forecast_startdate, one_contract_id]
 hist_yest = no_elec_yesterday.loc[:forecast_startdate, one_contract_id]
 
 hist_df = pd.concat([hist_no_e, hist_yest], axis=1)    
+
 

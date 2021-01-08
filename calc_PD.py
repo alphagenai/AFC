@@ -13,6 +13,7 @@ import numpy as np
 import seaborn as sns
 
 from matplotlib import pyplot as plt
+from scipy.stats import beta
 
 from individual_analysis1 import create_percent_sdf
 
@@ -285,15 +286,16 @@ def plot_prior_histogram(df, title):
     df.plot(kind='hist', bins=30, title=title)
     plt.savefig('files\{}.png'.format(title))
 
-def plot_beta(a, b):
+def plot_beta(a, b, ax=None):
     x = np.arange (0, 1, 0.01)
     y = beta.pdf(x,a,b, )
-    plt.plot(x,y)
+    if ax is None:
+        fig, ax = plt.subplots()
+    ax.plot(x,y)
         
 
 
 if __name__ == "__main__":
-    from scipy.stats import beta
 
     monthly_sdf_pivot = main()
     pd_calc = PDCalculator(monthly_sdf_pivot)
