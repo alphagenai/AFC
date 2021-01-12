@@ -8,6 +8,7 @@ Created on Thu Jan  7 15:36:22 2021
 import random
 import pandas as pd
 import numpy as np
+import seaborn as sns
 
 from matplotlib import pyplot as plt
 
@@ -92,35 +93,3 @@ def all_plots():
 
 # hist_df = pd.concat([hist_no_e, hist_yest], axis=1)    
 
-########## TRANSITION PROBABILITIES FROM PAR30 STATE
-
-par30_daily_pivot = daily_sdf_fullts['PAR30+'].unstack(0).sort_index()
-
-
-## completed contracts are converted to NaN
-## be careful that the start and end dates of both dataframes is the same
-fully_paid = daily_cumulative_percent_sdf_pivot.shift(1) >= 0.80 #final payment is not included in fully paid flag
-par30_daily_pivot = par30_daily_pivot.mask(fully_paid).astype('boolean')
-
-daily_cumulative_percent_sdf_pivot.loc[:,par30_daily_pivot.any(axis=0)].plot()
-daily_cumulative_percent_sdf_pivot.loc[:,par30_daily_pivot.any(axis=0)].to_csv('PAR30_examples.csv')
-par30_daily_pivot.loc[:, par30_daily_pivot.any(axis=0)].to_csv('Par_30_examples2.csv')
-
-## seems right
-#daily_cumulative_percent_sdf_pivot.loc['June-2018':'Aug-2018','1349716'].plot()
-
-unconditional_daily_PE = par30_daily_pivot.sum().sum() / par30_daily_pivot.count().sum() 
-
-par30_yesterday_pivot = par30_daily_pivot.shift(1)
-
-transition_to_par30 = ~par30_yesterday_pivot & par30_daily_pivot 
-transition_from_par30 = par30_yesterday_pivot & ~par30_daily_pivot 
-
-transition_df = pd.concat([transition_to_par30.sum(), transition_from_par30.sum()], axis=1) #.to_csv('transition_probs.csv')
-
-recovery = (transition_df[0] == transition_df[1])
-recovery.sum() / recovery.count()
-
-""" TO DO: investigate sequences of par30 and how long they tend to be. 
-hypothesis: the longer the par30, the less likely the recovery
-"""

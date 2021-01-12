@@ -26,3 +26,12 @@ high_corr_ts.cumsum(axis=0).plot()
 no_NAs = pd_calc._defaults.fillna(False)
 mycorr = no_NAs.corr()
 no_NAs.loc[:,mycorr.isna().all()]  # NAs are all false
+
+
+## par30 correlation
+par30_daily_pivot = daily_sdf_fullts['PAR30+'].unstack(0).sort_index()
+mycorr= par30_daily_pivot.corr()
+sns.heatmap(mycorr)
+
+par30_daily_pivot.cov()
+daily_sdf_pivot.rolling(360).corr().abs().mean()
