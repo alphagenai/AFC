@@ -17,6 +17,8 @@ from scipy.stats import norm as scinorm
 from scipy.stats import beta
 
 from Counterparty import Counterparty
+from probability_of_electricity import PE_calc
+from calculate_days_dropped import calculate_days_dropped
 
 
 
@@ -30,20 +32,24 @@ def main():
     monthly_sdf = daily_sdf.groupby(['ContractId',pd.Grouper(freq='M', level=1)])['AmountPaid'].sum()
     monthly_sdf_pivot = monthly_sdf.unstack(0).fillna(0)
 
-    RSQ = 0.3
+    daily_sdf_pivot = daily_sdf['AmountPaid'].unstack(0).fillna(0).sort_index()    
+    daily_sdf_fullts = calculate_days_dropped(daily_sdf)
+
+
+    # RSQ = 0.3
     PD = 0.055
     recovery_prob = 0.4
     
     d = (1-exp(-50*PD)) / (1-exp(-50))
     AIRB_RSQ = 0.12*(d) + 0.24*(1 - d)
     
-    forecast_months = ['June', 'July', 'Aug']
     forecast_date = '31/12/2019'
     
     portfolio = {}
-    for cid in df.index.get_level_values(0).unique():
-        portfolio[j] = Counterparty(cid)
-        portfolio[j].update_probabilities(forecast_date)
+    pe_calc = PE_calc()
+    for cid in df.index.get_level_values(0).unique()[1:2]:
+        portfolio[cid] = Counterparty(cid)
+        pe_calc.update_counterparty_PE(portfolio[cid], forecast_date)
     
     
         #for i, month in enumerate(forecast_months):
@@ -52,16 +58,18 @@ def main():
             # random.seed(i)
             # individual_risk = random.standard_normal(1000)
 
+        ## VECTORIZED:
+        # par30_index = individual_latent_factors < scinorm.ppf(PD)  # dont currently have individual level PD probability
+        # recovery_index = individual_latent_factors > scinorm.ppf(1-recovery_prob)
 
 
     def monthly_forecast(counterparty, state_of_the_world, individual_risk):
         i = 1
         
-        individual_latent_factors = sqrt(counterparty.RSQ) * state_of_the_world + sqrt(1-RSQ)*individual_risk
+        individual_latent_factor = sqrt(counterparty.RSQ) * state_of_the_world + sqrt(1-counterparty.RSQ)*individual_risk
         
-        par30_index = individual_latent_factors < scinorm.ppf(counterpary.PD)
-        recovery_index = individual_latent_factors > scinorm.ppf(1-recovery_prob)
+        par30_flag = individual_latent_factor < scinorm.ppf(PD)  # dont currently have individual level PD probability
+        recovery_flag = individual_latent_factor > scinorm.ppf(1-recovery_prob)
         
         
-        for counterparty, individual_latent_factor in zip(counterparties, individual_latent_factors):
-            c_beta = beta.ppf(individual_latent_factor, counterparty.alpha, counterparty.beta)
+        c_beta = beta.ppf(individual_latent_factor, counterparty.alpha, counterparty.beta)
