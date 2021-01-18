@@ -52,6 +52,7 @@ def read_payment_data_from_bigquery():
             and
             p.PaymentResultTypeEntity != 'PAYMENT_FREE_CREDIT'
             and c.PaymentMethod = 'FINANCED'
+            and c.Product in ('X850', 'X850 Plus')
         )
         
     GROUP BY monthdiff, cohort_year, cohort_month
@@ -92,6 +93,7 @@ def read_payment_data_from_bigquery():
                 on a.ContractId = c.ContractId 
             WHERE c.PaymentMethod = 'FINANCED'
             and a.BalanceChangeType = 'MANUAL'
+            and c.Product in ('X850', 'X850 Plus')
 
             )
             
@@ -132,6 +134,8 @@ def read_contract_data_from_bigquery():
     
     FROM `afcproj.files_dupe.Contracts_20201117`
     WHERE PaymentMethod = 'FINANCED'
+                and Product in ('X850', 'X850 Plus')
+
     GROUP BY cohort_month, cohort_year
     """
     
