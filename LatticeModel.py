@@ -85,10 +85,10 @@ class LatticeModel(object):
         self.nodes_dict[t+1] = new_nodes
         
     def calculate_expectation(self, t):
-        raise NotImplementedError
-        for node in self.nodes_dict[t]:
-            pass
-
+        probs = np.array([node.p for node in self.nodes_dict[t]])
+        vals = np.array([node.cum_val for node in self.nodes_dict[t]])
+        return np.dot(probs, vals)
+        
     def plot_forecasts(self, T):
         t_list = [node.t for tau in range(T) for node in self.nodes_dict[tau]]
         p_list = [node.p for tau in range(T) for node in self.nodes_dict[tau]]
@@ -145,7 +145,7 @@ if __name__ == "__main__":
     pd_calc = PDCalculator(monthly_sdf_pivot)
     PD_dict = pd_calc.calc_PD(monthly_sdf_pivot)
 
-    monthly_sdf_fullts = calc_moving_average(monthly_sdf)
+    monthly_sdf_fullts = calc_moving_average(monthly_sdf.to_frame())
     
     ma_pivot = monthly_sdf_fullts['MovingAverage'].unstack(0).shift(1).fillna(method='ffill') #shift(1) for next month forecast, ffill for future months with no MA (because no payments made)
     
