@@ -21,6 +21,11 @@ sns.set_style('white')
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(message)s')
 
+
+""" tODO: LIFETIME PD - the probability of entering PAR30 then never paying anything again """
+
+
+
 def main():
 
     df = pd.read_pickle('files\\small_df_1000_dec_17.pkl')
@@ -62,7 +67,8 @@ class PDCalculator(object):
         self.PD_dict = {}
         self._monthly_sdf_pivot = monthly_sdf_pivot
 
-    def data_prep(self, monthly_sdf_pivot):
+    def data_prep(self, ):
+        monthly_sdf_pivot = self._monthly_sdf_pivot
         monthly_cumulative_percent_sdf_pivot = create_percent_sdf(monthly_sdf_pivot, cumulative=True, cohort='dec_17')
         self._monthly_cumulative_percent_sdf_pivot = monthly_cumulative_percent_sdf_pivot
         
@@ -89,9 +95,10 @@ class PDCalculator(object):
         
         return defaults, last_month_defaults
 
-    def calc_PD(self, monthly_sdf_pivot, kind="point_estimate"):
+    def calc_PD(self, kind="point_estimate"):
         
-        defaults, last_month_defaults = self.data_prep(monthly_sdf_pivot)
+        monthly_sdf_pivot = self._monthly_sdf_pivot
+        defaults, last_month_defaults = self.data_prep()
         
         """ TO DO: FIX THIS: """
         ### REMEMBER FALSE & NA = FALSE!!
@@ -217,8 +224,9 @@ class BayesianPDUpdater(object):
         elif ~two_element_series[0] & ~two_element_series[1]:
             self._parameter_dict["PD_given_ND_beta"] += 1
     
-    def Update_PD(self, hist_df):
+    def update_PD(self, hist_df):
         hist_df.apply(self.update_logic, axis=1)
+        return self._parameter_dict
     
 def bayes_PD_updates(forecast_startdate, one_contract_id, defaults, last_month_defaults, 
                      PD_given_D_alpha, PD_given_D_beta, PD_given_ND_alpha, PD_given_ND_beta):
@@ -233,14 +241,15 @@ def bayes_PD_updates(forecast_startdate, one_contract_id, defaults, last_month_d
     
     labels = hist_df.apply(label_logic, axis=1, parameter_dict=_parameter_dict)
     counts = labels.groupby(labels).count()
+    
+    ### DOES THIS ACTUALLY WORK??
+    # empcounts = pd.Series(data=[0,0,0,0], index=[['D_given_D',
+    #                                            'ND_given_D',
+    #                                            'D_given_ND',
+    #                                            'ND_given_ND',]])
+    # empcounts += counts
 
-    empcounts = pd.Series(data=[0,0,0,0], index=[['D_given_D',
-                                               'ND_given_D',
-                                               'D_given_ND',
-                                               'ND_given_ND',]])
-    empcounts += counts
-
-    empcounts.add(counts, fill_value=0)
+    # empcounts.add(counts, fill_value=0)
     
     PD_given_D_alpha += counts['D_given_D']
     PD_given_D_beta += counts['ND_given_D']
@@ -299,7 +308,7 @@ if __name__ == "__main__":
 
     monthly_sdf_pivot = main()
     pd_calc = PDCalculator(monthly_sdf_pivot)
-    PD_dict = pd_calc.calc_PD(monthly_sdf_pivot)
+    PD_dict = pd_calc.calc_PD()
     
     one_contract_id = monthly_sdf_pivot.columns[1]  # nice and switchy
     #one_contract_id = monthly_sdf_pivot.columns[3]  # same as lattice
@@ -320,7 +329,7 @@ if __name__ == "__main__":
                       }
     
     bpdu = BayesianPDUpdater(initial_params)
-    bpdu.Update_PD(hist_df)
+    bpdu.update_PD(hist_df)
     
     print(bpdu._parameter_dict)
 
