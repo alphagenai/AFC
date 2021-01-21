@@ -13,6 +13,7 @@ import numpy as np
 from LatticeModel import LatticeModel
 from calc_PD import PDCalculator
 from monthly_averages import calc_moving_average
+from Counterparty import Counterparty
 
 from scipy.stats import beta
 
@@ -22,37 +23,45 @@ def initialise():
     
     monthly_sdf = df.groupby(['ContractId',pd.Grouper(key='TransactionTS', freq='M',)])['AmountPaid'].sum()
     monthly_sdf_pivot = monthly_sdf.unstack(0).fillna(0)
-    
-    pd_calc = PDCalculator(monthly_sdf_pivot)
-    PD_dict = pd_calc.calc_PD(monthly_sdf_pivot)
-    
+        
     monthly_sdf_fullts = calc_moving_average(monthly_sdf.to_frame())
     
     ma_pivot = monthly_sdf_fullts['MovingAverage'].unstack(0).shift(1).fillna(method='ffill') #shift(1) for next month forecast, ffill for future months with no MA (because no payments made)
     
-    return monthly_sdf_pivot, ma_pivot, PD_dict
+    return monthly_sdf_pivot, ma_pivot
 
-#one_ma = ma_pivot[one_contract_id]
-#forecast_dates = pd.date_range('2019-6-30', '2019-11-30', freq='1M')
+def six_month_expectation(counterparty, ma_pivot, monthly_sdf_pivot, forecast_startdate):
+    forecast_startdate = '2019-6-30'
+    average_payment = ma_pivot.loc[forecast_startdate, counterparty.ContractId]
+    initial_payment = monthly_sdf_pivot.loc[forecast_startdate, counterparty.ContractId] 
 
-monthly_sdf_pivot, ma_pivot, PD_dict = initialise()
-for cid in monthly_sdf_pivot.columns[1:3]:
-    one_ma = ma_pivot[cid]
-    #for forecast_startdate in forecast_dates:
+    counterparty.update_bayesian_mean_PDs(monthly_sdf_pivot, forecast_startdate)
 
-    def six_month_expectation(cid, one_ma, monthly_sdf_pivot, PD_dict):
-        forecast_startdate = '2019-6-30'
-        average_payment = one_ma[forecast_startdate]
-        initial_payment = monthly_sdf_pivot.loc[forecast_startdate, cid] 
-
-        lm = LatticeModel(initial_payment, average_payment=average_payment, 
-                          contract_id=cid, forecast_startdate=forecast_startdate, 
-                          PD_dict=PD_dict)
+    lm = LatticeModel(initial_payment, average_payment=average_payment, 
+                      contract_id=counterparty.ContractId, 
+                      forecast_startdate=forecast_startdate, 
+                      PD_dict=counterparty.PD_dict)
 
 
-        for t in range(6):
-            lm.add_level()
-        print(lm.calculate_expectation(t=6))
+    for t in range(6):
+        lm.add_level()
+    return lm, lm.calculate_expectation(t=6)
 
 
+if __name__ == "__main__":
+    monthly_sdf_pivot, ma_pivot = initialise()
+    forecast_startdate = '2019-06-01'
+    counterparty_dict = {}
+    for cid in monthly_sdf_pivot.columns[1:3]:
+        counterparty_dict[cid] = Counterparty(cid)
+        #for forecast_startdate in forecast_dates:
+        lm, counterparty_dict[cid].six_month_expectation = six_month_expectation(
+            counterparty_dict[cid], ma_pivot, monthly_sdf_pivot, forecast_startdate)  
+
+
+
+
+actual = monthly_sdf_pivot.loc[
+    forecast_startdate:pd.Timestamp(forecast_startdate)+pd.DateOffset(months=6), counterparty_dict[cid].ContractId
+                               ].cumsum()
 
