@@ -19,12 +19,14 @@ from individual_analysis1 import create_percent_sdf
 
 
 class Node(object):
-    def __init__(self, t, val, prev_node, PD_dict):
+    def __init__(self, t, val, prev_node, PD_dict, use_percent_val=True):
         self.t = t
         self.value = val
         if prev_node is not None:
-            self.cum_val = prev_node.cum_val+val
-
+            if use_percent_val:
+                self.cum_val = np.min([prev_node.cum_val+val, 1.0])  #nodes cannot be worth more than 100%
+            else:
+                self.cum_val = prev_node.cum_val+val
             prev_paid = (prev_node.value != 0)
             paid = (val != 0)
             if prev_paid & paid:
@@ -38,7 +40,10 @@ class Node(object):
             else:
                 raise ValueError('Something went wrong')
         else:
-            self.cum_val = val
+            if use_percent_val:
+                self.cum_val = np.min([1.0, val])
+            else:
+                self.cum_val = val
 
 
 
@@ -66,7 +71,7 @@ class LatticeModel(object):
             initial_node = Node(0, initial_payment, None, PD_dict)  
             initial_node.p = 1
         else:
-            initial_node = Node(0, 0, None, PD_dict)
+            initial_node = Node(0, 0.0, None, PD_dict)
             initial_node.p = 1
 
         self.nodes_dict = {0:[initial_node,]}            
@@ -80,7 +85,7 @@ class LatticeModel(object):
         new_nodes = []
         for node in self.nodes_dict[t]:
             node.offspring1 = Node(t+1, self.average_payment, node, self.PD_dict)
-            node.offspring2 = Node(t+1, 0, node, self.PD_dict)
+            node.offspring2 = Node(t+1, 0.0, node, self.PD_dict)
             new_nodes.extend([node.offspring1, node.offspring2])
         self.nodes_dict[t+1] = new_nodes
         
