@@ -6,14 +6,17 @@ Created on Tue Jan 12 16:07:19 2021
 """
 
 import time
+import logging
 
 import pandas as pd
 import numpy as np
 import seaborn as sns
+import matplotlib.ticker as mtick
 
 from matplotlib import pyplot as plt
 from scipy.stats import beta
-import matplotlib.ticker as mtick
+from sklearn.metrics import mean_squared_error
+
 
 from LatticeModel import LatticeModel
 from calc_PD import PDCalculator
@@ -41,7 +44,12 @@ def initialise(use_values=True):
         monthly_sdf_fullts = calc_moving_average(monthly_sdf.to_frame('AmountPaid'))
     else:
         monthly_sdf_fullts = calc_moving_average(monthly_perc_sdf_pivot.stack().to_frame('AmountPaid'))
-    ma_pivot = monthly_sdf_fullts['MovingAverage'].unstack(0).shift(1).fillna(method='ffill') #shift(1) for next month forecast, ffill for future months with no MA (because no payments made)
+        
+    
+    ma_pivot = monthly_sdf_fullts['MovingAverage'].unstack(
+        0).shift(                           # shift(1) for next month forecast
+            1).fillna(                      # ffill for future months with no MA (because no payments made)
+            method='ffill').fillna(0)       # fillna(0) for contracts with not enough payments to create a moving average
     
     if use_values:
         return monthly_sdf_pivot, ma_pivot
@@ -68,6 +76,8 @@ def six_month_expectation(counterparty, ma_pivot, monthly_sdf_pivot,
 
 
 if __name__ == "__main__":
+    
+    logging.basicConfig()
     monthly_sdf_pivot, ma_pivot = initialise(use_values=False)
     forecast_startdate = '2019-06-01'
     
@@ -76,6 +86,7 @@ if __name__ == "__main__":
     
     counterparty_dict = {}
     diff_list = []
+    results_dict = {}
     for cid in monthly_sdf_pivot.columns:
         tic = time.perf_counter()
         counterparty_dict[cid] = Counterparty(cid)
@@ -87,13 +98,27 @@ if __name__ == "__main__":
         actual = monthly_sdf_pivot.loc[
             forecast_startdate:pd.Timestamp(forecast_startdate)+pd.DateOffset(months=6), counterparty_dict[cid].ContractId
                                        ].cumsum().iloc[-1]
+        
 
+        
         diff_list += [counterparty_dict[cid].six_month_expectation - actual,]
+        results_dict[cid] = (actual, counterparty_dict[cid].six_month_expectation, lm)
         toc = time.perf_counter()
-        print(f"Time taken to forecast one counterparty: {toc - tic:0.4f} seconds")
+        logging.info(f"Time taken to forecast one counterparty: {toc - tic:0.4f} seconds")
+        
+        if np.isnan(actual):
+            logging.warning('Actual value for {} is nan'.format(cid))
+        if np.isnan(counterparty_dict[cid].six_month_expectation):
+            logging.warning('Model value for {} is nan'.format(cid))
+
+
         
     sns.histplot(diff_list)
     ax = plt.gca()
     ax.xaxis.set_major_formatter(mtick.PercentFormatter(1.0))
     plt.title('Histogram of Model Error')
     plt.savefig('files\\histogram of errors.png')
+    
+    nan_cparty = [k for (k, v) in counterparty_dict.items() if np.isnan(v.six_month_expectation)]
+    
+    df = pd.DataFrame.from_dict(results_dict, orient='index')
