@@ -12,8 +12,9 @@ from scipy.stats import beta
 from calc_PD import BayesianPDUpdater, PDCalculator
 
 class Counterparty(object):
-    def __init__(self, ContractId):
+    def __init__(self, ContractId, total_contract_value=None):
         self.ContractId = ContractId
+        self.total_contract_value = total_contract_value
         self.alpha = 1
         self.beta = 1
         self.PD = 0.055
@@ -34,21 +35,25 @@ class Counterparty(object):
     def percent_timeseries(self, startdate=None, enddate=None):
         raise NotImplementedError()
         
-    def update_PD_params(self, monthly_df_pivot, forecast_startdate):
+    def update_PD_params(self, monthly_df_pivot, forecast_startdate, pd_calc=None):
         """ updates alpha and beta using calc_PD """
     
         bpdu = BayesianPDUpdater(self.params)
-        pd_calc = PDCalculator(monthly_df_pivot)
         
-        defaults, last_month_defaults = pd_calc.data_prep()
+        if pd_calc is None:
+            pd_calc = PDCalculator(monthly_df_pivot)    
+            defaults, last_month_defaults = pd_calc.data_prep()
+        else:
+            defaults, last_month_defaults = pd_calc._defaults, pd_calc._last_month_defaults
+
         hist_d = defaults.loc[:forecast_startdate, self.ContractId]
         hist_prev_d = last_month_defaults.loc[:forecast_startdate, self.ContractId]
         hist_df = pd.concat([hist_d, hist_prev_d], axis=1)    
             
         self.params = bpdu.update_PD(hist_df)
         
-    def update_bayesian_mean_PDs(self, monthly_df_pivot, forecast_startdate):
-        self.update_PD_params(monthly_df_pivot, forecast_startdate)
+    def update_bayesian_mean_PDs(self, monthly_df_pivot, forecast_startdate, pd_calc=None):
+        self.update_PD_params(monthly_df_pivot, forecast_startdate, pd_calc=pd_calc)
     
         self.PD_given_D = beta.mean(self.params['PD_given_D_alpha'], self.params['PD_given_D_beta'])
         self.PND_given_D = 1 - self.PD_given_D 
