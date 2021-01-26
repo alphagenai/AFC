@@ -8,7 +8,10 @@ Created on Fri Jan  8 11:02:22 2021
 
 import seaborn as sns
 import pandas as pd
+import scipy.stats as stats
 
+
+from scipy.stats import norm as scinorm
 from matplotlib import pyplot as plt
 
 from individual_analysis1 import create_percent_sdf
@@ -91,8 +94,9 @@ def latent_factor_correlations():
     means = monthly_percent_sdf_pivot.mask(fully_paid).mean(axis=1)
     stds = monthly_percent_sdf_pivot.mask(fully_paid).std(axis=1)
 
-    mean = monthly_percent_sdf_pivot.mask(fully_paid).stack().mean()
-    std = monthly_percent_sdf_pivot.mask(fully_paid).stack().std()
+    # EXCLUDE DECEMBER!
+    mean = monthly_percent_sdf_pivot.mask(fully_paid).loc['2018':].stack().mean()
+    std = monthly_percent_sdf_pivot.mask(fully_paid).loc['2018':].stack().std()
 
     
     centered = monthly_percent_sdf_pivot.sub(mean)
@@ -112,9 +116,16 @@ def latent_factor_correlations():
     fig, ax = plt.subplots()
     title = 'Monthly normalised latent factor against % payment'
     plt.scatter(norm.loc['2018':].stack(), monthly_percent_sdf_pivot.loc['2018':].stack(),)
-    ax.set_xlim(-3, 6)
+    ax.set_xlim(-3, 8)
     ax.set_ylim(-0.025, 0.2)
     plt.title(title)
+    
+    x = np.linspace(-3, 8, 300)
+    ax.plot(x, stats.norm.pdf(x, 0, 1))
+    
+    plt.axvline(x=scinorm.ppf(0.055), color='red')
+    plt.axvline(x=scinorm.ppf(0.046), color='red')
+
     plt.savefig('files\\'+title)
 
 def pca_analysis():
