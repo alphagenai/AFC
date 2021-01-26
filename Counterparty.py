@@ -6,6 +6,7 @@ Created on Fri Jan 15 18:05:43 2021
 """
 
 import pandas as pd
+import logging
 
 from scipy.stats import beta
 
@@ -65,6 +66,9 @@ class Counterparty(object):
                    'PND_given_D':self.PND_given_D, 
                    'PND_given_ND':self.PND_given_ND,
                    }
+        logging.debug('Updated PD dict: {}'.format(
+            [(key, value) for key, value in self.PD_dict.items()]
+            ))
 
 
 
