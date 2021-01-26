@@ -19,7 +19,6 @@ from individual_analysis1 import create_percent_sdf
 
 sns.set_style('white')
 
-logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(message)s')
 
 
 """ tODO: LIFETIME PD - the probability of entering PAR30 then never paying anything again """
@@ -27,6 +26,7 @@ logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(message)s')
 
 
 def main():
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout, format='%(message)s')
 
     df = pd.read_pickle('files\\small_df_1000_dec_17.pkl')
     df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:%S').dt.tz_localize(None)
@@ -67,9 +67,11 @@ class PDCalculator(object):
         self.PD_dict = {}
         self._monthly_sdf_pivot = monthly_sdf_pivot
 
-    def data_prep(self, ):
-        monthly_sdf_pivot = self._monthly_sdf_pivot
-        monthly_cumulative_percent_sdf_pivot = create_percent_sdf(monthly_sdf_pivot, cumulative=True, cohort='dec_17')
+    def data_prep(self, monthly_sdf_pivot=None, monthly_cumulative_percent_sdf_pivot=None):
+        if monthly_sdf_pivot is None:
+            monthly_sdf_pivot = self._monthly_sdf_pivot
+        if monthly_cumulative_percent_sdf_pivot is None:
+            monthly_cumulative_percent_sdf_pivot = create_percent_sdf(monthly_sdf_pivot, cumulative=True, cohort='dec_17')
         self._monthly_cumulative_percent_sdf_pivot = monthly_cumulative_percent_sdf_pivot
         
         defaults = (monthly_sdf_pivot==0).astype('boolean') # total non-NaN: 36,000 incl Dec; 28,593 incl. Jan 18
@@ -212,6 +214,8 @@ class BayesianPDUpdater(object):
         
     def update_logic(self, two_element_series,):
         # default & prev_default
+        if two_element_series.isna().any():
+            return
         if two_element_series[0] & two_element_series[1]:
             self._parameter_dict["PD_given_D_alpha"] += 1
         # default & not prev_default
@@ -237,7 +241,7 @@ def bayes_PD_updates(forecast_startdate, one_contract_id, defaults, last_month_d
 
     hist_df = pd.concat([hist_d, hist_prev_d], axis=1)    
 
-    print(hist_df)
+    #print(hist_df)
     
     labels = hist_df.apply(label_logic, axis=1, parameter_dict=_parameter_dict)
     counts = labels.groupby(labels).count()
@@ -313,6 +317,8 @@ if __name__ == "__main__":
     one_contract_id = monthly_sdf_pivot.columns[1]  # nice and switchy
     #one_contract_id = monthly_sdf_pivot.columns[3]  # same as lattice
     #one_contract_id = monthly_sdf_pivot.columns[0]  # lots of defaults
+
+    one_contract_id = '1364513' # has NA
 
     forecast_startdate = '2019-12-31'
 
