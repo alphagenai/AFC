@@ -8,23 +8,94 @@ Created on Thu Dec 10 13:27:40 2020
 import pandas as pd
 import numpy as np
 import seaborn as sns
+import logging
 
 from scipy.stats import binom
 from matplotlib import pyplot as plt
+from math import isclose
 
 from calc_PD import PDCalculator
 from monthly_averages import calc_moving_average
 from individual_analysis1 import create_percent_sdf
 
+""" TO DO: CHECK THAT THE CUMULATIVE VALUES ARE CORRECT """
+
+
+def initialise(use_percent):
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    df = pd.read_pickle('files\\small_df_1000_dec_17.pkl')
+    df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:%S').dt.tz_localize(None)
+    
+    forecast_startdate = '2019-6-30'
+
+    monthly_sdf = df.groupby(['ContractId',pd.Grouper(key='TransactionTS', freq='M',)])['AmountPaid'].sum()
+        
+
+    if use_percent:
+        monthly_sdf_pivot, monthly_averages = initialise_percent(monthly_sdf)
+    else:
+        monthly_sdf_pivot, monthly_averages = initialise_values(monthly_sdf)
+
+    pd_calc = PDCalculator(monthly_sdf_pivot)
+    _, _ = pd_calc.data_prep()
+
+    ma_pivot = monthly_averages['MovingAverage'].unstack(0).shift(1) #shift(1) for next month forecast
+
+    one_contract_id = monthly_sdf_pivot.columns[3]  # original example
+    one_contract_id = monthly_sdf_pivot.columns[8]  # someone new
+    one_contract_id = '1349968'
+
+
+    one_ma = ma_pivot[one_contract_id]
+    if one_ma.isna().any():
+        logging.warning("Not enough payment data to calculate moving average")
+    
+    #forecast_dates = monthly_sdf_pivot[forecast_startdate:].index
+
+    counterparty = Counterparty(one_contract_id)
+    counterparty.update_bayesian_mean_PDs(monthly_sdf_pivot, forecast_startdate, pd_calc)
+
+    average_payment = one_ma[forecast_startdate]
+    if np.isnan(average_payment):
+        logging.warning("Not enough payment data to calculate moving average")
+        average_payment = monthly_sdf_pivot.loc[:forecast_startdate, one_contract_id].mean()
+
+    initial_payment = monthly_sdf_pivot.loc[forecast_startdate, one_contract_id] 
+    paid_so_far = monthly_sdf_pivot.loc[:forecast_startdate, one_contract_id].sum()
+        
+    return initial_payment, paid_so_far, average_payment, counterparty, forecast_startdate, monthly_sdf_pivot
+
+def initialise_percent(monthly_sdf):
+    monthly_sdf_pivot = monthly_sdf.unstack(0).fillna(0)
+    monthly_perc_sdf_pivot = create_percent_sdf(monthly_sdf_pivot,
+                                                cumulative=False, use_monthdiff=False, cohort='dec_17')
+
+    monthly_averages = calc_moving_average(monthly_perc_sdf_pivot.stack().to_frame('AmountPaid'))
+    
+    return monthly_perc_sdf_pivot, monthly_averages
+
+def initialise_values(monthly_sdf):
+    monthly_sdf_pivot = monthly_sdf.unstack(0).fillna(0)
+    monthly_averages = calc_moving_average(monthly_sdf.to_frame())
+
+    return monthly_sdf_pivot, monthly_averages
+    
 
 
 class Node(object):
-    def __init__(self, t, val, prev_node, PD_dict, use_percent_val=True):
+    def __init__(self, t, val, prev_node, PD_dict, use_percent_val):
         self.t = t
         self.value = val
         if prev_node is not None:
             if use_percent_val:
-                self.cum_val = np.min([prev_node.cum_val+val, 1.0])  #nodes cannot be worth more than 100%
+                if prev_node.cum_val == 1.0:
+                    self.cum_val = 1.0
+                    self.p = prev_node.p
+                    return
+                else:
+                    self.cum_val = np.min([prev_node.cum_val+val, 1.0])  #nodes cannot be worth more than 100%
             else:
                 self.cum_val = prev_node.cum_val+val
             prev_paid = (prev_node.value != 0)
@@ -44,6 +115,14 @@ class Node(object):
                 self.cum_val = np.min([1.0, val])
             else:
                 self.cum_val = val
+                
+    def __repr__(self):
+        return '<Node[{}]: value: {:.2f}, prob:{:.2f}, cum_val: {:.2f}>'.format(self.t,
+                                                                 self.value,
+                                                                 self.p,
+                                                                 self.cum_val,
+                                                                 )
+
 
 
 
@@ -59,20 +138,22 @@ def label(x, color, label):
 
 class LatticeModel(object):
     """ TO DO: ENSURE TOTAL PAYMENTS DO NOT GO OVER 100% """
-    def __init__(self, initial_payment, average_payment, 
-                 contract_id, forecast_startdate, PD_dict):
+    def __init__(self, initial_payment, paid_so_far, average_payment, 
+                 contract_id, forecast_startdate, PD_dict, use_percent=True):
         self.initial_payment = initial_payment
         self.average_payment = average_payment
         self.contract_id = contract_id
         self.forecast_startdate = forecast_startdate
         self.PD_dict=PD_dict
+        self.use_percent = use_percent
 
         if initial_payment:
-            initial_node = Node(0, initial_payment, None, PD_dict)  
-            initial_node.p = 1
+            initial_node = Node(0, initial_payment, None, PD_dict, self.use_percent)  
         else:
-            initial_node = Node(0, 0.0, None, PD_dict)
-            initial_node.p = 1
+            initial_node = Node(0, 0.0, None, PD_dict, self.use_percent)
+        initial_node.p = 1
+        initial_node.cum_val = paid_so_far
+        logging.debug('Node created: {}'.format(repr(initial_node)))
 
         self.nodes_dict = {0:[initial_node,]}            
 
@@ -84,10 +165,26 @@ class LatticeModel(object):
         t = max(self.nodes_dict.keys())
         new_nodes = []
         for node in self.nodes_dict[t]:
-            node.offspring1 = Node(t+1, self.average_payment, node, self.PD_dict)
-            node.offspring2 = Node(t+1, 0.0, node, self.PD_dict)
-            new_nodes.extend([node.offspring1, node.offspring2])
+            node.offspring1 = Node(t+1, self.average_payment, node, self.PD_dict, self.use_percent)
+            logging.debug('Node created: {}'.format(repr(node.offspring1)))
+            new_nodes.extend([node.offspring1,])
+            
+            if (self.use_percent and node.cum_val == 1.0):
+                pass # we only want one child node if we already have paid off the contract
+            else: # contract not paid off
+                node.offspring2 = Node(t+1, 0.0, node, self.PD_dict, self.use_percent)
+                logging.debug('Node created: {}'.format(repr(node.offspring2)))
+
+                new_nodes.extend([node.offspring2,])
+                
         self.nodes_dict[t+1] = new_nodes
+        self.check_probabilities(new_nodes)
+
+    def check_probabilities(self, nodes):
+        p=0.0
+        for node in nodes:
+            p+=node.p
+        assert isclose(p, 1.0, abs_tol=1e-8), 'probabilities do not sum to 1.0 for counterparty {}, sum is {}'.format(self.contract_id, p)
         
     def calculate_expectation(self, t):
         probs = np.array([node.p for node in self.nodes_dict[t]])
@@ -139,38 +236,15 @@ class LatticeModel(object):
         
         
 if __name__ == "__main__":
+    from Counterparty import Counterparty
+    
+    use_percent=True
+    
+    initial_payment, paid_so_far, average_payment, counterparty, forecast_startdate, monthly_sdf_pivot = initialise(use_percent)
 
-
-    df = pd.read_pickle('files\\small_df_1000_dec_17.pkl')
-    df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:%S').dt.tz_localize(None)
-    
-    monthly_sdf = df.groupby(['ContractId',pd.Grouper(key='TransactionTS', freq='M',)])['AmountPaid'].sum()
-    monthly_sdf_pivot = monthly_sdf.unstack(0).fillna(0)
-    
-    pd_calc = PDCalculator(monthly_sdf_pivot)
-    PD_dict = pd_calc.calc_PD(monthly_sdf_pivot)
-
-    monthly_sdf_fullts = calc_moving_average(monthly_sdf.to_frame())
-    
-    ma_pivot = monthly_sdf_fullts['MovingAverage'].unstack(0).shift(1).fillna(method='ffill') #shift(1) for next month forecast, ffill for future months with no MA (because no payments made)
-    
-
-    one_contract_id = monthly_sdf_pivot.columns[3]  # original example
-    one_contract_id = monthly_sdf_pivot.columns[8]  # someone new
-    one_ma = ma_pivot[one_contract_id]
-    forecast_startdate = '2019-6-30'
-    
-    forecast_dates = monthly_sdf_pivot[forecast_startdate:].index
-
-    
-    average_payment = one_ma[forecast_startdate]
-    initial_payment = monthly_sdf_pivot.loc[forecast_startdate, one_contract_id] 
-    
-    
-
-    lm = LatticeModel(initial_payment, average_payment=average_payment, 
-                      contract_id=one_contract_id, forecast_startdate=forecast_startdate, 
-                      PD_dict=PD_dict)
+    lm = LatticeModel(initial_payment, paid_so_far=paid_so_far, average_payment=average_payment, 
+                      contract_id=counterparty.ContractId, forecast_startdate=forecast_startdate, 
+                      PD_dict=counterparty.PD_dict, use_percent=use_percent)
     
     for t in range(7):
         lm.add_level()
@@ -180,8 +254,8 @@ if __name__ == "__main__":
     
     fig, ax = plt.subplots()
     title = 'Realised Cumulative Payments'
-    actual = monthly_sdf_pivot.loc[
-        forecast_startdate:pd.Timestamp(forecast_startdate)+pd.DateOffset(months=5), one_contract_id
+    actual = paid_so_far + monthly_sdf_pivot.loc[
+        forecast_startdate:pd.Timestamp(forecast_startdate)+pd.DateOffset(months=5), counterparty.ContractId
                                    ].cumsum()
     ax = actual.plot(ax=ax,title = title)
     ax.set_xlabel('Time')
@@ -191,10 +265,10 @@ if __name__ == "__main__":
         
     
     
-def plot_forecasts(tss, forecasts, past_length, num_plots):
-    for target, forecast in islice(zip(tss, forecasts), num_plots):
-        ax = target[-past_length:].plot(figsize=(12, 5), linewidth=2)
-        forecast.plot(color='g')
-        plt.grid(which='both')
-        plt.legend(["observations", "median prediction", "90% confidence interval", "50% confidence interval"])
-        plt.show()
+# def plot_forecasts(tss, forecasts, past_length, num_plots):
+#     for target, forecast in islice(zip(tss, forecasts), num_plots):
+#         ax = target[-past_length:].plot(figsize=(12, 5), linewidth=2)
+#         forecast.plot(color='g')
+#         plt.grid(which='both')
+#         plt.legend(["observations", "median prediction", "90% confidence interval", "50% confidence interval"])
+#         plt.show()
