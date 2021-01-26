@@ -43,7 +43,7 @@ def calc_moving_average(monthly_sdf):
     ## need to drop the first month and its not currently grouping by contractID properly
      
     monthly_sdf_fullts["MovingAverage"] = monthly_sdf_fullts.reset_index(level=0).groupby(
-        ['ContractId', 'paid',])['AmountPaid'].rolling(6).mean().unstack('paid')[True]
+        ['ContractId', 'paid',])['AmountPaid'].rolling(6).mean().unstack('paid')[True].ffill()
     return monthly_sdf_fullts
 
 
