@@ -9,6 +9,22 @@ import pandas as pd
 
 from individual_analysis1 import month_diff
 
+
+"""
+TO DO: USE THE PERCENTAGE CHANGE IN PERCENTAGE REPAYMENT FROM THE PREVIOUS MONTH COHORT!
+
+Why am i reinventing the wheel here? isnt this already implemented in moving_average_model?
+
+"""
+
+
+
+
+
+
+
+""" SIMPLE MOVING AVERAGE-BASED FORECAST """
+
 ## just removed the word _cohort
 PAYMENT_DATA_SQL = """ 
     Select p.TransactionTS,
@@ -44,6 +60,11 @@ PAYMENT_DATA_SQL = """
         """
 
 cohort = 'September_2019'
+
+forecast_startdate = '2019-6-30'
+forecast_monthdiff = 18
+
+
 sql = PAYMENT_DATA_SQL.format(cohort)
             
 df = pd.read_gbq(sql,)
@@ -55,7 +76,7 @@ df = df.groupby(['ContractId','monthdiff']).agg({
     'Duration':'sum',
     })    
 
-df = df['AmountPaid'].astype('float64').sort_index()
+df = df['AmountPaid'].astype('float64').sort_index().to_frame()
 
 df['paid_cumsum'] = df.groupby(['ContractId',]).cumsum()
 
@@ -70,12 +91,20 @@ contract_SQL = """
 cdf = pd.read_gbq(contract_SQL,index_col='ContractId').astype('float64')
 
 
-contract_ts = df_cumsum.to_frame().join(cdf, how='inner')
+contract_ts = df.join(cdf, how='inner')
 contract_values = contract_ts['TotalContractValue']
 
 
 contract_ts['percent_paid'] = contract_ts['AmountPaid'] / contract_ts['TotalContractValue']
 
-contract_ts['moving_average_6m'] = contract_ts.reset_index().groupby('ContractId')['AmountPaid'].rolling(window=6).mean()
+contract_ts['moving_average_6m'] = contract_ts.reset_index('ContractId').groupby(
+    'ContractId')['percent_paid'].rolling(window=6).mean()
 
-contract_ts['moving_average_6m_cumsum'] = contract_ts.reset_index().groupby(['ContractId',])['moving_average_6m'].cumsum()
+contract_ts['moving_average_6m_cumsum'] = contract_ts.groupby('ContractId')['moving_average_6m'].cumsum()
+
+contract_ts['perc_moving_average_6m_cumsum'] = contract_ts['moving_average_6m_cumsum'] / contract_ts['TotalContractValue']
+
+contract_ts['simple_6m_forecast'] = pd.concat(contract_ts['percent_paid'].loc[:, :forecast_monthdiff]
+                                              
+                                            
+contract_ts['simple_cum_6m_forecast'] = contract_ts['simple_6m_forecast'].groupby .apply(lambda x:np.min([x, 1.0]))
