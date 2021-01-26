@@ -113,8 +113,6 @@ def reduce_df_size(df, size, random_seed=42):
     return small_df
 
 def create_percent_sdf(input_df, cumulative=True, use_monthdiff=False, cohort='jan_19'):
-    
-    
     ### Get Contract info
     
     SQL = """
@@ -144,7 +142,7 @@ def create_percent_sdf(input_df, cumulative=True, use_monthdiff=False, cohort='j
         pass
     else:
         return_df.index = pd.to_datetime(return_df.index,format='%Y/%m/%d %H:%M:%S')
-    
+        return_df.index.rename('TransactionTS', inplace=True)
     return return_df
 
 def convert_to_daily_pivot(small_df ):
