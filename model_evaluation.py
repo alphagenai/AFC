@@ -122,9 +122,12 @@ def plot_errors(diff_list, title=None):
     sns.histplot(diff_list)
     ax = plt.gca()
     ax.xaxis.set_major_formatter(mtick.PercentFormatter(1.0))
+    plt.xlim(-0.3, 0.3)
+    plt.ylim(0, 150)
+
     if title is None:
         title = 'Histogram of Model Error'
-        plt.title(title)
+    plt.title(title)
     plt.savefig('files\\{}.png'.format(title))
     
 
@@ -157,7 +160,20 @@ if __name__ == "__main__":
 
     one_rd = results_dict[forecast_dates[0]]
     df = pd.DataFrame.from_dict(one_rd, orient='index')
-    plot_errors(df[0] - df[1], 'Histogram of Errors - Lattice Model')
-    plot_errors(df[0] - df[2], 'Histogram of Errors - Naive Moving Average')    
+    not_completed = df[df[0]<1.0]
     
+    lattice_model_error = not_completed[0] - not_completed[1]
+    naive_model_error = not_completed[0] - not_completed[2]
+    plot_errors(lattice_model_error , 'Histogram of Errors - Lattice Model')
+    plot_errors(naive_model_error , 'Histogram of Errors - Naive Moving Average')    
+    
+    print('Lattice model mean error: {:.2f}'.format(lattice_model_error.mean()))
+    print('Lattice model error std: {:.2f}'.format(lattice_model_error.std()))
+    print('Lattice model mean squared error: {:.2f}'.format(mean_squared_error(not_completed[0],not_completed[1])))
+
+    print('Naive model mean error: {:.2f}'.format(naive_model_error.mean()))
+    print('Naive model error std: {:.2f}'.format(naive_model_error.std()))
+    print('Naive model mean squared error: {:.2f}'.format(mean_squared_error(not_completed[0],not_completed[2])))
+
+
     cid = '1354267'
