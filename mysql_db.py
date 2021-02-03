@@ -11,3 +11,6 @@ import mysql.connector
 cnx = mysql.connector.connect(user='root', password='nj+xRF91',
                               host='localhost',
                               database='afc')
+
+print(cnx)
+input("press any key")
