@@ -16,3 +16,14 @@ elec_on = (~daily_sdf_fullts['elec_is_off']).groupby(['ContractId', pd.Grouper(f
 sns.histplot(elec_on.unstack(0).mask(fully_paid).stack(), bins=31)
 plt.title('Days of electricity used per month')
 plt.savefig('files\\Days of electricity used per month.png')
+
+## need to make sure that both these time series are in daily frequency
+no_elec_pivot = daily_sdf_fullts['days_out_of_elec'].unstack(0).loc['2017-12-01':'2020-11-17'].mask(fully_paid)
+## days without elec at end of ts
+noelec_end = no_elec_pivot.iloc[-1]
+
+## max days without elec
+noelec_max = no_elec_pivot.max()
+
+(noelec_end > 30).sum()
+((noelec_end == noelec_max) & (noelec_end >30)).sum()
