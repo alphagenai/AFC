@@ -190,7 +190,20 @@ class LatticeModel(object):
         probs = np.array([node.p for node in self.nodes_dict[t]])
         vals = np.array([node.cum_val for node in self.nodes_dict[t]])
         return np.dot(probs, vals)
+    
+    @property
+    def df(self):
+        T = max(self.nodes_dict.keys())
+        t_list = [node.t for tau in range(T) for node in self.nodes_dict[tau]]
+        p_list = [node.p for tau in range(T) for node in self.nodes_dict[tau]]
+        v_list = [node.cum_val for tau in range(T) for node in self.nodes_dict[tau]]
+        cprty_list = [self.contract_id for tau in range(T) for node in self.nodes_dict[tau]]
+
         
+        df = pd.DataFrame(dict(t=t_list, v=v_list, p=p_list, c=cprty_list))
+        self._df = df = df.groupby(['t','v', 'c']).sum().reset_index().set_index(['c','t'])
+        return self._df
+
     def plot_forecasts(self, T):
         t_list = [node.t for tau in range(T) for node in self.nodes_dict[tau]]
         p_list = [node.p for tau in range(T) for node in self.nodes_dict[tau]]
@@ -249,8 +262,8 @@ if __name__ == "__main__":
     for t in range(7):
         lm.add_level()
     
-    lm.plot_forecasts(6)
-    print(lm._df)
+    #lm.plot_forecasts(6)
+    print(lm.df)
     
     fig, ax = plt.subplots()
     title = 'Realised Cumulative Payments'
