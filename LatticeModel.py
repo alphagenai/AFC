@@ -194,10 +194,10 @@ class LatticeModel(object):
     @property
     def df(self):
         T = max(self.nodes_dict.keys())
-        t_list = [node.t for tau in range(T) for node in self.nodes_dict[tau]]
-        p_list = [node.p for tau in range(T) for node in self.nodes_dict[tau]]
-        v_list = [node.cum_val for tau in range(T) for node in self.nodes_dict[tau]]
-        cprty_list = [self.contract_id for tau in range(T) for node in self.nodes_dict[tau]]
+        t_list = [node.t for tau in range(T+1) for node in self.nodes_dict[tau]]
+        p_list = [node.p for tau in range(T+1) for node in self.nodes_dict[tau]]
+        v_list = [node.cum_val for tau in range(T+1) for node in self.nodes_dict[tau]]
+        cprty_list = [self.contract_id for tau in range(T+1) for node in self.nodes_dict[tau]]
 
         
         df = pd.DataFrame(dict(t=t_list, v=v_list, p=p_list, c=cprty_list))
