@@ -25,8 +25,6 @@ def calculate_days_dropped(daily_sdf):
     """ Calculate a cumulative sum of days without Electricity, first creating an
     index containing all dates """
 
-
-    
     #daily_sdf['TransactionTS'] = daily_sdf.index.get_level_values(1)
 
     #daily_sdf[['prev_payment_date', 'prev_duration']] = daily_sdf.groupby(level=0)[['TransactionTS', 'Duration']].shift(1)
@@ -38,7 +36,7 @@ def calculate_days_dropped(daily_sdf):
     #daily_sdf['days_dropped'] = (daily_sdf['TransactionTS']  - daily_sdf['prev_payment_date'] - pd.to_timedelta(daily_sdf['prev_duration'], unit='D')).dt.days
 
     
-    ## stupid americans
+    ## date format wierdness
     date_idx = pd.date_range('12/01/2017', '30-11-2020')
     idx = pd.MultiIndex.from_product(
         [daily_sdf.index.levels[0], date_idx], names=['ContractId', 'TransactionTS'])
@@ -93,16 +91,14 @@ def cumsum_limit(s, floor=-np.inf, limit=np.inf):
 
 if __name__ == "__main__":
 
-    df = pd.read_pickle('files\\small_df_1000_dec_17.pkl')
-    df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:%S').dt.tz_localize(None)
-
-    df = df.groupby(['ContractId', 'TransactionTS']).sum()
-
-    daily_sdf = df.groupby(['ContractId', pd.Grouper(freq='1D', level=1)]).sum()
-
-
+    from basic_datasets import BasicDatasets
+    
+    bd = BasicDatasets()
+    daily_sdf = bd.daily_sdf
     daily_sdf_fullts = calculate_days_dropped(daily_sdf)
-    daily_sdf_fullts.to_csv('daily_full_timeseries.csv')
+    
+    
+    #daily_sdf_fullts.to_csv('daily_full_timeseries.csv')
 
 
 
