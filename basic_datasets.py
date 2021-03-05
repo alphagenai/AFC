@@ -79,6 +79,11 @@ class BasicDatasets(object):
             self._monthly_cumulative_percent_sdf_pivot = create_percent_sdf(self.monthly_sdf_pivot, cumulative=True, cohort=self.cohort)
             return self._monthly_cumulative_percent_sdf_pivot
 
+    @property
+    def monthly_fully_paid(self):
+        return self.monthly_cumulative_percent_sdf_pivot.shift(1) >= 0.99
+
+
 
 
     @property
@@ -148,17 +153,12 @@ if __name__ == "__main__":
     cohort='dec_17'
     bd = BasicDatasets()
     df = bd.df
-    dts = bd.daily_full_ts
     
-    full_ts_with_cum_val = pd.merge(dts,
-        bd.daily_cumulative_percent_sdf_pivot.stack().swaplevel().to_frame('cum_val'),
-        left_index=True,
-        right_index=True)
+    #dts = bd.daily_full_ts
     
-    cid = '1349704'
-
-    df.loc[cid]
+    #full_ts_with_cum_val = pd.merge(dts,
+        # bd.daily_cumulative_percent_sdf_pivot.stack().swaplevel().to_frame('cum_val'),
+        # left_index=True,
+        # right_index=True)
     
-    dts.loc[cid].loc['Sept-2020']
     
-    full_ts_with_cum_val.loc[cid].loc['Sept-2020']
