@@ -7,6 +7,7 @@ Created on Tue Dec 29 00:12:12 2020
 
 import logging
 import sys
+import copy
 
 import pandas as pd
 import numpy as np
@@ -210,7 +211,7 @@ class PDCalculator(object):
 
 class BayesianPDUpdater(object):
     def __init__(self, initial_params):
-        self._parameter_dict = initial_params
+        self._parameter_dict = copy.copy(initial_params)
         
     def update_logic(self, two_element_series,):
         # default & prev_default
@@ -254,6 +255,8 @@ def bayes_PD_updates(forecast_startdate, one_contract_id, defaults, last_month_d
     # empcounts += counts
 
     # empcounts.add(counts, fill_value=0)
+    
+    logging.debug('In bayes_PD_updates counts found {}'.format(counts))
     
     PD_given_D_alpha += counts['D_given_D']
     PD_given_D_beta += counts['ND_given_D']
@@ -299,12 +302,15 @@ def plot_prior_histogram(df, title):
     df.plot(kind='hist', bins=30, title=title)
     plt.savefig('files\{}.png'.format(title))
 
-def plot_beta(a, b, ax=None):
+def plot_beta(a, b, ax=None, title=None):
     x = np.arange (0, 1, 0.01)
     y = beta.pdf(x,a,b, )
     if ax is None:
         fig, ax = plt.subplots()
-    ax.plot(x,y)
+    ax.plot(x,y, )
+    plt.title(title)
+    plt.savefig('files\\{}.png'.format(title.replace('|', ' given ')))
+    return ax
         
 
 
@@ -318,7 +324,7 @@ if __name__ == "__main__":
     #one_contract_id = monthly_sdf_pivot.columns[3]  # same as lattice
     #one_contract_id = monthly_sdf_pivot.columns[0]  # lots of defaults
 
-    one_contract_id = '1364513' # has NA
+    #one_contract_id = '1364513' # has NA
 
     forecast_startdate = '2019-12-31'
 
@@ -343,14 +349,24 @@ if __name__ == "__main__":
     #                                   pd_calc._defaults, pd_calc._last_month_defaults, 
     #                                   PD_given_D_alpha, PD_given_D_beta, PD_given_ND_alpha, 
     #                                   PD_given_ND_beta)
+
+
+    ax = plot_beta(initial_params['PD_given_D_alpha'], 
+                   initial_params['PD_given_D_beta'], title='Initial P(D|D)')
+
+    plot_beta(initial_params['PD_given_ND_alpha'], 
+                   initial_params['PD_given_ND_beta'], ax=ax, title='Initial Distributions')
     
 
 
-    plot_beta(bpdu._parameter_dict['PD_given_D_alpha'], 
-                   bpdu._parameter_dict['PD_given_D_beta'])
+    ax = plot_beta(bpdu._parameter_dict['PD_given_D_alpha'], 
+                   bpdu._parameter_dict['PD_given_D_beta'], title='Posterior P(D|D)')
 
     plot_beta(bpdu._parameter_dict['PD_given_ND_alpha'], 
-                   bpdu._parameter_dict['PD_given_ND_beta'])
+                   bpdu._parameter_dict['PD_given_ND_beta'], ax=ax, title='Posterior Distributions')
 
 
-
+    PD_given_D = beta.mean(bpdu._parameter_dict['PD_given_D_alpha'], bpdu._parameter_dict['PD_given_D_beta'])
+    PND_given_D = 1 - PD_given_D 
+    PD_given_ND = beta.mean(bpdu._parameter_dict['PD_given_ND_alpha'], bpdu._parameter_dict['PD_given_ND_beta'])
+    PND_given_ND = 1 - PD_given_ND 
