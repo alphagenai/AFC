@@ -14,6 +14,13 @@ from matplotlib import pyplot as plt
 from basic_datasets import BasicDatasets
 from sklearn.model_selection import TimeSeriesSplit
 
+
+
+""" OKAY BUT BEAR IN MIND _OF COURSE_ theres going to be high predictability of electricity
+    usage because any unused credits from larger purchases get carried over to the next month 
+    Need to think about the kurtosis of payment distribution AND the relationship between 
+    historic payment amounts, amount left to pay and future electricity usage """
+
 bd = BasicDatasets()
 
 mfp = bd.monthly_fully_paid
