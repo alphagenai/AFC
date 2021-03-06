@@ -24,6 +24,7 @@ from sklearn.model_selection import TimeSeriesSplit
 bd = BasicDatasets()
 
 mfp = bd.monthly_fully_paid
+mpp = bd.monthly_percent_pivot.mask(mfp)
 
 dfts = bd.daily_ts #full dataset excluding paid off contracts
 monthly_days_of_elec = (~dfts['elec_is_off']).groupby(['ContractId', pd.Grouper(freq='1M', level=1)]).sum()
@@ -33,13 +34,16 @@ mde_perc_pivot = mde_pivot.divide(mde_pivot.index.daysinmonth, axis=0)
 
 reg = linear_model.LinearRegression()
 
-ds = mde_perc_pivot.loc['Jan-2018':'Jul-2018'].dropna(axis=1, how='any')
+input_df = mde_perc_pivot
+input_df = mpp
+
+ds = input_df.loc['Jan-2018':'Jul-2018'].dropna(axis=1, how='any')
 X_train = ds.loc['Jan-2018':'Jun-2018'].T
 y_train = ds.loc['July-2018'].T
 
 reg.fit(X_train,y_train)
 reg.coef_
-y_pred = reg.predict(X_test)
+#y_pred = reg.predict(X_test)
 
 # tscv = TimeSeriesSplit(6, max_train_size=6)
 
@@ -53,9 +57,9 @@ ds_list = []
 X_train_list = []
 X_test_list = {}
 
-for i in range(len(mde_perc_pivot)-8+1): #+1 for start month 
+for i in range(len(input_df)-8+1): #+1 for start month 
     ## start in Jan (index 1) end at 6months_x + 1 month_y + 1 bcos python 
-    ds = mde_perc_pivot.iloc[i+1:i+8].dropna(axis=1, how='any')
+    ds = input_df.iloc[i+1:i+8].dropna(axis=1, how='any')
     X_train = ds.iloc[0:6].T
     y_train = ds.iloc[6].T
     reg.fit(X_train,y_train)
