@@ -25,35 +25,43 @@ monthly_days_of_elec = (~dfts['elec_is_off']).groupby(['ContractId', pd.Grouper(
 
 mde_pivot = monthly_days_of_elec.unstack(0)
 
+mde_perc_pivot = mde_pivot.divide(mde_pivot.index.daysinmonth, axis=0)
+
 acf_dict1 = {}
 acf_dict2 = {}
 acf_dict3 = {}
 acf_dict4 = {}
+acf_dict5 = {}
 
 for cprty in unfinished_contracts.columns:
     s1 = unfinished_contracts.loc[:, cprty]
     s2 = monthly_sdf_pivot.loc[:, cprty]
     s3 = mde_pivot.loc[:, cprty]
+    s4 = mde_perc_pivot.loc[:, cprty]
+
     #plot_acf(s)
 
     acf_dict1[cprty] = pd.Series(sm.tsa.acf(s1, nlags=12, missing='drop'))
     acf_dict2[cprty] = pd.Series(sm.tsa.acf(s2, nlags=12, missing='drop'))
     acf_dict3[cprty] = pd.Series(sm.tsa.acf(s3, nlags=12, missing='drop'))
     acf_dict4[cprty] = pd.Series(sm.tsa.acf(s3, nlags=12, missing='none'))
+    acf_dict5[cprty] = pd.Series(sm.tsa.acf(s4, nlags=12, missing='none'))
     
 df1 = pd.DataFrame.from_dict(acf_dict1)
 df2 = pd.DataFrame.from_dict(acf_dict2)
 df3 = pd.DataFrame.from_dict(acf_dict3)
 df4 = pd.DataFrame.from_dict(acf_dict4)
+df5 = pd.DataFrame.from_dict(acf_dict5)
 
 #print(df1.mean(axis=1))
 #print(df2.mean(axis=1))
 print(df3.mean(axis=1))
 print(df3.mean(axis=0))
 print(df4.mean(axis=1))
+print(df5.mean(axis=1))
 
 
-df3.to_csv('temp.csv')
+#df3.to_csv('temp.csv')
 
 best_params = df1.mean(axis=1).loc[1:6]
 
