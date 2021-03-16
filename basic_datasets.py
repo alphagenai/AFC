@@ -57,6 +57,18 @@ class BasicDatasets(object):
         df = pd.read_pickle('files\\small_df_1000_dec_17.pkl')
         df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:%S').dt.tz_localize(None)
         self.df = df.groupby(['ContractId', 'TransactionTS']).sum()
+
+    @property
+    def contract_values(self):
+        cdf = pd.read_pickle('files\\contract_df_{}.pkl'.format(cohort))
+        return cdf
+
+
+        
+    @property
+    def contract_info(self):
+        raise NotImplementedError
+
         
     @property
     def monthly_sdf(self):
