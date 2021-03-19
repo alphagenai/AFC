@@ -7,11 +7,11 @@ Created on Tue Jan 12 16:38:04 2021
 
 import pandas as pd
 import numpy as np
+import seaborn as sns
 
 from matplotlib import pyplot as plt
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, HuberRegressor
 from scipy import stats
-
 
 from basic_datasets import BasicDatasets
 
@@ -61,19 +61,23 @@ month = '2020-03-31'
 ctp = cumulative_tokens.unstack(0).ffill(axis=0)
 pd.concat([ctp.loc[month], final_loss], axis=1)
 
-for month in ['2018-03-31', '2019-03-31', '2020-03-31']:
-    fig, ax = plt.subplots()
-    #ax.scatter(x=ctp.loc[month], y=final_loss)
-    ax.scatter(x=ctp.loc[month], y=loss_on_remainder.loc[month])
-    plt.title(month)
-    fig, ax = plt.subplots()
-    #ax.scatter(x=mcpp.loc[month], y=final_loss)
-    ax.scatter(x=mcpp.loc[month], y=loss_on_remainder.loc[month]) ## looks best
-    ax.set_ylim(0,1)
-    plt.title(month)
+if 0:
+    for month in ['2018-03-31', '2019-03-31', '2020-03-31']:
+        fig, ax = plt.subplots()
+        #ax.scatter(x=ctp.loc[month], y=final_loss)
+        ax.scatter(x=ctp.loc[month], y=loss_on_remainder.loc[month])
+        plt.title(month)
+        fig, ax = plt.subplots()
+        #ax.scatter(x=mcpp.loc[month], y=final_loss)
+        ax.scatter(x=mcpp.loc[month], y=loss_on_remainder.loc[month]) ## looks best
+        ax.set_ylim(0,1)
+        plt.title(month)
+
+
 
 def EL_model(month):
-    model = LinearRegression()
+    #model = LinearRegression()
+    model = HuberRegressor()
     x=mcpp.loc[month].values.clip(0,1)
     y=loss_on_remainder.loc[month].values.clip(0,1)
     
@@ -81,18 +85,39 @@ def EL_model(month):
     slope, intercept, r_value, p_value, std_err = stats.linregress(x[mask], y[mask])
     
     model.fit(x[mask].reshape((-1, 1)), y[mask])
-    model.predict(np.array([0.5, 0.6, 0.7]).reshape((-1, 1)))
+    fig, ax = plt.subplots()
+    sns.regplot(x=x[mask], y=y[mask])
+    plt.title(month)
+    ax.set_xlabel('paid so far')
+    ax.set_ylabel('loss on remainder')
+    ax.set_xlim(0,1)
+    ax.set_ylim(0,1)
+    plt.savefig('files\\reg model for {}'.format(month.date()))
+    return model
+
+def EL_model_predict(month):
+    return model_dict[month].predict(np.array(one_ts.loc[month]).reshape((-1,1)))[0]
     
 def portfolio_expected_loss(dcpp):
     final_value = dcpp.iloc[-1]
     final_loss = 1 - final_value
     PEL = final_loss.mean()
-    final_loss.plot(kind='hist')
+    final_loss.plot(kind='hist', bins=100)
     return PEL
+
+def apply_model(s):
+    """ s is the cumulative payments series """
+    month = s.name
+    return s + (1-s)*(1-EL_model_predict(month))
+
+
+model_dict = {}
+for month in pd.date_range('Jan-2018', 'Nov-2020', freq='M'):
+    model_dict[month] = EL_model(month)
     
 PEL = portfolio_expected_loss(mcpp)
 
-one_contract = mcpp.columns[3]
+one_contract = mcpp.columns[11]
 one_ts = mcpp[one_contract]
 
 ## Assume cost and v0 are the same for now (aka margin=0)
@@ -101,16 +126,33 @@ expected_monthly_repayment = 1/len(one_ts.index)
 df = one_ts.to_frame('paid')
 df['emr'] = expected_monthly_repayment
 df['cum_emr'] = df['emr'].cumsum()
-v = {}
-for i, cum_payment in enumerate(one_ts):
-    v[i+1] = cum_payment + (1-cum_payment)*(1-PEL) - expected_monthly_repayment
+v = {0:v_0}
+
+if 0:
+    for i, s in enumerate(one_ts.iteritems()):
+        month = s[0]
+        cum_payment = s[1]
+        v[i+1] = cum_payment + (1-cum_payment)*(1-EL_model_predict(month))  #margin not currently included
     
-one_ts_vals = one_ts + (1-one_ts)*(1-PEL) - df['cum_emr']
+    
 
-vals = (mcpp + (1-mcpp)*(1-PEL)).subtract(df['cum_emr'], axis=0).mask(fully_paid)
-returns = vals.diff()
+vals=mcpp.iloc[1:-1].apply(apply_model, axis=1)    
 
-returns.corr().stack().describe()
+rets=vals.diff()
+rs = rets.stack()
+rs.plot(kind='hist', bins=50)
+
+norm_rets = (rs - rs.mean()) / rs.std()
+norm_rets.plot(kind='hist', bins=50)
+
+cm = norm_rets.unstack(1).corr()
+
+#sns.heatmap(cm.stack().sort_values().unstack(1),)
+cm.stack().describe()
+
+
+cm_2018 = norm_rets.unstack(1).loc['2018'].corr()
+cm_2018.stack().describe()
 
 """ 
     both 50% paid in month 2 and 50% in month 3 will have high values (high returns) 
