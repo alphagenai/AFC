@@ -28,7 +28,7 @@ def initialise(use_percent):
     df = pd.read_pickle('files\\small_df_1000_dec_17.pkl')
     df['TransactionTS'] = pd.to_datetime(df['TransactionTS'],format='%Y/%m/%d %H:%M:%S').dt.tz_localize(None)
     
-    forecast_startdate = '2019-6-30'
+    forecast_startdate = '2020-6-30'
 
     monthly_sdf = df.groupby(['ContractId',pd.Grouper(key='TransactionTS', freq='M',)])['AmountPaid'].sum()
         
@@ -45,7 +45,7 @@ def initialise(use_percent):
 
     one_contract_id = monthly_sdf_pivot.columns[3]  # original example
     one_contract_id = monthly_sdf_pivot.columns[8]  # someone new
-    one_contract_id = '1349968'
+    one_contract_id = '1349704'
 
 
     one_ma = ma_pivot[one_contract_id]
@@ -247,6 +247,13 @@ class LatticeModel(object):
         g.fig.suptitle(title)
         plt.savefig('files\\'+title)
         
+    def plot_confidence_interval(self, t):
+        df = self._df.droplevel(0).loc[t]
+        df['cdf'] = df['p'].cumsum()
+        df['not_cdf'] = df['p'][::-1].cumsum()[::-1]
+        ax = df['v'].plot(kind='hist', weights=df['p'], bins=df.index.size)
+        df2 = df[(df['cdf'] > 0.025) & (df['not_cdf'] > 0.025)]
+        ax = df2['v'].plot(kind='hist', weights=df2['p'], color='r', ax=ax, bins=df2.index.size)
         
 if __name__ == "__main__":
     from Counterparty import Counterparty
