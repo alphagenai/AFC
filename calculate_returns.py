@@ -135,10 +135,13 @@ class RatesRegressionModel(object):
 
 
 class ElectricityRegressionModel(object):
-    def __init__(self, dfts, month, model=LinearRegression()):
+    def __init__(self, dfts, mpp, month, model=LinearRegression()):
+        
+        self.dfts = dfts
+        self.mpp = mpp
         
         use_rate = True
-        use_log = True
+        multivariate = True
         
         dooep = dfts['days_out_of_elec'].unstack(0).mask(daily_fully_paid)
         tokens_pivot = dfts['Duration'].unstack(0).mask(daily_fully_paid)
@@ -147,19 +150,37 @@ class ElectricityRegressionModel(object):
         self.model = model
 
 
-        x = dooep.loc[month]
+        x = np.log(1+dooep.loc[month])
         y = tokens_pivot.loc[month:].sum()
 
         if use_rate:
             y = tokens_pivot.loc[month:].sum() / tokens_pivot.loc[month:].index.size
+
+        self._hr = self.hist_rate()        
+        self._fr = self.future_rate()
+
+        y = self._fr
         
-        if use_log:
-            x = np.log(1+dooep.loc[month])
+        if multivariate:
+            x = pd.concat([x, self._hr], axis=1)
 
-        mask = ~np.isnan(x) & ~np.isnan(y)
+        mask = ~np.isnan(x).any(axis=1) & ~np.isnan(y)
 
-        self.x = x[mask].values.reshape((-1, 1))
+        self.x = x[mask]
         self.y = y[mask]
+
+        
+    def hist_rate(self, num_months=6):
+        self.num_months = num_months
+        hist_df = self.mpp.loc[:month].iloc[-num_months:]
+        r = hist_df.sum() / hist_df.index.size
+        return r
+
+    def future_rate(self, num_months=None):
+        if num_months is None:
+            future_df = self.mpp.loc[month:]
+            r = future_df.sum() / future_df.index.size
+            return r
 
         
     def fit(self):
@@ -178,9 +199,9 @@ class ElectricityRegressionModel(object):
         
     def plot(self):
         fig, ax = plt.subplots()
-        ax.scatter(x=self.x, y=self.y)
+        ax.scatter(x=self.x[0], y=self.y)
         x_r = np.linspace(0,np.max(self.x),100)
-        y_r = self.predict(x_r.reshape((-1, 1))) 
+        y_r = self.predict(x_r) #.reshape((-1, 1))) 
         ax.plot(x_r, y_r, color='blue', linewidth=3)
         plt.title('Regression model for {}'.format(month.date()))
         ax.set_xlabel('log(days without elec)')
@@ -301,7 +322,7 @@ if __name__ == "__main__":
         #model_type = HuberRegressor(fit_intercept=True)
         #model_dict[month] = RatesRegressionModel(mpp.mask(fully_paid), month, LinearRegression(fit_intercept=False))
         #model_dict[month] = ELRegressionModel(bd, month,  HuberRegressor(fit_intercept=True))
-        model_dict[month] = ElectricityRegressionModel(dfts, month, LinearRegression(fit_intercept=True))
+        model_dict[month] = ElectricityRegressionModel(dfts, mpp, month, LinearRegression(fit_intercept=True))
         model_dict[month].fit()
         model_dict[month].plot()
         
