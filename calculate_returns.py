@@ -35,7 +35,8 @@ class RegModelDatasets(object):
         self.loss_on_remainder = (final_loss/remainder).mask(fully_paid)
         self.dooep = dfts['days_out_of_elec'].unstack(0).mask(daily_fully_paid)
         self.tokens_pivot = dfts['Duration'].unstack(0).mask(daily_fully_paid)
-        self.tokens_remaining = None
+        self.tokens_remaining = dfts.elec_transaction_cumsum.unstack(0).mask(daily_fully_paid)
+
 
 class ElectricityRegressionModel(object):
     def __init__(self, rmds, month, 
@@ -54,13 +55,15 @@ class ElectricityRegressionModel(object):
         x1 = np.log(1+rmds.dooep.loc[month]).rename('ln_days_no_elec')
         x2 = np.log(0.00000001 + self._hr).rename('ln_hist_rate')
         x3 = np.log(rmds.mcpp.loc[month].clip(0,1)).rename('ln_cum_paymts')
+        x4 = np.log(1+ rmds.tokens_remaining.loc[month]).rename('ln_tokens_left')
         
         ## old
         #y = tokens_pivot.loc[month:].sum() / tokens_pivot.loc[month:].index.size
-        y = np.log(0.00000001 + self._fr)
+        #y = np.log(0.00000001 + self._fr)
+        y = self._fr <= 0.01
         
 
-        X = pd.concat([x1, x2, x3,], axis=1)
+        X = pd.concat([x1, x2, x3, x4], axis=1)
         X2d = pd.concat([x1, x2,], axis=1)
 
 
@@ -162,23 +165,26 @@ class ElectricityRegressionModel(object):
         plt.close()
 
 
-    def plot_4d(self):
-        x = self.X['ln_days_no_elec']
-        y = self.X['ln_hist_rate']
-        z = self.X['ln_cum_paymts']
-        c = np.exp(self.y) - 0.00000001
-        
+    def plot_4d(self, col_to_drop='ln_cum_paymts'):
+        X = self.X.copy().drop(columns=[col_to_drop])
+        x = X['ln_days_no_elec']
+        y = X['ln_hist_rate']
+        #z = self.X['ln_cum_paymts']
+        z = X[X.columns[-1]] #ln_tokens_left
+
+        #c = np.exp(self.y) - 0.00000001
+        c = self.y
         
         
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         img = ax.scatter(x, y, z, c=c, cmap=plt.get_cmap('bwr'))
-        cbar = fig.colorbar(img)
+        #cbar = fig.colorbar(img)
         
-        ax.set_xlabel('log(days without elec)', fontsize=12)
-        ax.set_ylabel('log(6 month purchase rate)', fontsize=12)
-        ax.set_zlabel('log(cumulative payments)', fontsize=12)
-        cbar.ax.set_ylabel('future purchase rate', fontsize=12)
+        ax.set_xlabel('{}'.format(x.name), fontsize=12)
+        ax.set_ylabel('{}'.format(y.name), fontsize=12)
+        ax.set_zlabel('{}'.format(z.name), fontsize=12)
+        #cbar.ax.set_ylabel('future purchase rate', fontsize=12)
         
         plt.title('{}'.format(self.month.date()))
 
@@ -215,9 +221,10 @@ if __name__ == "__main__":
     margin = 0.0
     
     rmds = RegModelDatasets()
-    month = pd.Timestamp('31-12-2018')
+    month = pd.Timestamp('31-09-2018')
     erm = ElectricityRegressionModel(rmds, month,model=LinearRegression())
     erm.plot_4d()
+    erm.plot_4d(col_to_drop='ln_tokens_left')
     
 def predict_EL():    
     vals=mcpp.iloc[1:-1].apply(apply_model, args=(model_dict,), axis=1)    
