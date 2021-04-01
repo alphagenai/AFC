@@ -20,12 +20,12 @@ from basic_datasets import BasicDatasets
 
 
 class RegModelDatasets(object):
-    def __init(self, ):
+    def __init__(self, ):
         bd = BasicDatasets()
         self.dcpp = dcpp = bd.daily_cumulative_percent_sdf_pivot
-        self.mcpp = bd.monthly_cumulative_percent_sdf_pivot
+        self.mcpp = mcpp = bd.monthly_cumulative_percent_sdf_pivot
         self.mpp = bd.monthly_percent_pivot
-        self.fully_paid = bd.monthly_fully_paid
+        self.fully_paid = fully_paid = bd.monthly_fully_paid
         self.cdf = bd.contract_values
         self.dfts = dfts = bd.daily_full_ts
         self.daily_fully_paid = daily_fully_paid = bd.daily_fully_paid
@@ -35,12 +35,14 @@ class RegModelDatasets(object):
         self.loss_on_remainder = (final_loss/remainder).mask(fully_paid)
         self.dooep = dfts['days_out_of_elec'].unstack(0).mask(daily_fully_paid)
         self.tokens_pivot = dfts['Duration'].unstack(0).mask(daily_fully_paid)
-   
+        self.tokens_remaining = None
 
 class ElectricityRegressionModel(object):
     def __init__(self, rmds, month, 
                  model=LinearRegression(),
                  ):
+        
+        self.mpp = rmds.mpp
         
         self.month = month
         self.model = model
@@ -49,7 +51,7 @@ class ElectricityRegressionModel(object):
         self._fr = self.future_rate()
         
 
-        x1 = np.log(1+dooep.loc[month]).rename('ln_days_no_elec')
+        x1 = np.log(1+rmds.dooep.loc[month]).rename('ln_days_no_elec')
         x2 = np.log(0.00000001 + self._hr).rename('ln_hist_rate')
         x3 = np.log(rmds.mcpp.loc[month].clip(0,1)).rename('ln_cum_paymts')
         
@@ -59,14 +61,13 @@ class ElectricityRegressionModel(object):
         
 
         X = pd.concat([x1, x2, x3,], axis=1)
+        X2d = pd.concat([x1, x2,], axis=1)
+
+
 
         mask = ~np.isnan(X).any(axis=1) & ~np.isnan(y)
         self.X = X[mask]
-
-        else:
-            mask = ~np.isnan(x) & ~np.isnan(y)
-            self.x = x[mask].values.reshape((-1,1))
-
+        self.X2d = X2d[mask]
         self.y = y[mask]
 
         
@@ -82,24 +83,26 @@ class ElectricityRegressionModel(object):
             r = future_df.sum() / future_df.index.size
             return r
 
+    def fit_2feature(self):
+        self.model.fit(self.X2d, self.y)
         
     def fit(self):
-        self.model.fit(self.x, self.y)
+        self.model.fit(self.X, self.y)
 
-    def predict(self, x):
-        return self.model.predict(x)
+    def predict(self, X):
+        return self.model.predict(X)
     
     @property
     def rsq(self):
         #slope, intercept, r_value, p_value, std_err = stats.linregress(self.x.T, self.y)
         #print(r_value**2)
         #print(self.model.score(self.x, self.y))
-        return self.model.score(self.x, self.y)
+        return self.model.score(self.X, self.y)
 
         
     def plot_univariate(self, substr=None):
         fig, ax = plt.subplots()
-        x_r = np.linspace(0,np.max(self.x),100)
+        x_r = np.linspace(0,np.max(self.X),100)
 
         ax.scatter(x=self.x, y=self.y)
         y_r = self.predict(x_r.reshape((-1, 1)))           
@@ -114,8 +117,8 @@ class ElectricityRegressionModel(object):
         plt.close()
         
     def plot_3d(self):
-        x = self.x[self.x.columns[0]]
-        y = self.x[self.x.columns[1]]
+        x = self.X2d[self.X2d.columns[0]]
+        y = self.X2d[self.X2d.columns[1]]
         z = self.y
         x_pred = np.linspace(np.min(x), np.max(x), 100)   # range of elec purchase values
         y_pred = np.linspace(np.min(y), np.max(y), 100)  # range of purchase rate values
@@ -160,9 +163,9 @@ class ElectricityRegressionModel(object):
 
 
     def plot_4d(self):
-        x = self.x[self.x.columns[0]]
-        y = self.x[self.x.columns[1]]
-        z = self.x[self.x.columns[2]]
+        x = self.X['ln_days_no_elec']
+        y = self.X['ln_hist_rate']
+        z = self.X['ln_cum_paymts']
         c = np.exp(self.y) - 0.00000001
         
         
@@ -242,7 +245,7 @@ def predict_EL():
 
 
 #############################################################
-CODE NO LONGER USED
+"""                 CODE NO LONGER USED                   """
 #############################################################
 
 """
@@ -377,7 +380,7 @@ def EL_model_predict(month):
     
 
 def apply_model(s, model_dict):
-    """ s is the cumulative payments series """
+    ''' s is the cumulative payments series '''
     month = s.name
     EL = model_dict[month].predict(np.array(s).reshape((-1,1))).clip(0,1)[0]
     return s + (1-s)*(1-EL)
@@ -411,7 +414,7 @@ def portfolio_expected_loss(dcpp):
             cum_payment = s[1]
             v[i+1] = cum_payment + (1-cum_payment)*(1-EL_model_predict(month))  #margin not currently included
 
-
+"""
 
 
 """ 
