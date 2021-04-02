@@ -8,10 +8,11 @@ Created on Tue Jan 12 16:38:04 2021
 import pandas as pd
 import numpy as np
 import seaborn as sns
+import statsmodels.api as sm
 
 from matplotlib import pyplot as plt
 from sklearn.linear_model import LinearRegression, HuberRegressor
-from sklearn.svm import SVR
+from sklearn.svm import SVR, SVC
 from scipy import stats
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -30,13 +31,14 @@ class RegModelDatasets(object):
         self.dfts = dfts = bd.daily_full_ts
         self.daily_fully_paid = daily_fully_paid = bd.daily_fully_paid
         final_value = dcpp.iloc[-1]
-        final_loss = 1 - final_value
-        remainder = 1 - mcpp 
-        self.loss_on_remainder = (final_loss/remainder).mask(fully_paid)
+        self.final_loss = final_loss = 1 - final_value
+        self.remainder = remainder = (1 - mcpp).mask(fully_paid)
+        self.loss_on_remainder = (final_loss/remainder).clip(0,1).mask(fully_paid)
         self.dooep = dfts['days_out_of_elec'].unstack(0).mask(daily_fully_paid)
         self.tokens_pivot = dfts['Duration'].unstack(0).mask(daily_fully_paid)
         self.tokens_remaining = dfts.elec_transaction_cumsum.unstack(0).mask(daily_fully_paid)
 
+        #self.cinfo = 
 
 class ElectricityRegressionModel(object):
     def __init__(self, rmds, month, 
@@ -60,18 +62,23 @@ class ElectricityRegressionModel(object):
         ## old
         #y = tokens_pivot.loc[month:].sum() / tokens_pivot.loc[month:].index.size
         #y = np.log(0.00000001 + self._fr)
-        y = self._fr <= 0.01
-        
+        #y = self._fr <= 0.01
+        #y = np.log(0.00000001 + rmds.loss_on_remainder.loc[month])
+        #y = rmds.loss_on_remainder.loc[month] > 0.95
+        y = rmds.loss_on_remainder.loc[month]
+        #y = pd.cut(rmds.loss_on_remainder.loc[month], bins=3, labels=['good', 'middle', 'bad'])
+
 
         X = pd.concat([x1, x2, x3, x4], axis=1)
-        X2d = pd.concat([x1, x2,], axis=1)
+        #X2d = pd.concat([x1, x2,], axis=1)
 
-
-
-        mask = ~np.isnan(X).any(axis=1) & ~np.isnan(y)
-        self.X = X[mask]
-        self.X2d = X2d[mask]
-        self.y = y[mask]
+        if hasattr(y, 'cat'):  #TypeError: data type 'category' not understood
+            self.X = X
+            self.y = y
+        else:
+            mask = ~np.isnan(X).any(axis=1) & ~np.isnan(y)
+            self.X = X[mask]
+            self.y = y[mask]
 
         
     def hist_rate(self, num_months=6):
@@ -82,7 +89,7 @@ class ElectricityRegressionModel(object):
 
     def future_rate(self, num_months=None):
         if num_months is None:
-            future_df = self.mpp.loc[month:]
+            future_df = self.mpp.loc[self.month:]
             r = future_df.sum() / future_df.index.size
             return r
 
@@ -95,6 +102,13 @@ class ElectricityRegressionModel(object):
     def predict(self, X):
         return self.model.predict(X)
     
+    def print_stats(self):
+        X2 = sm.add_constant(self.X)
+        est = sm.OLS(self.y, X2)
+        est2 = est.fit()
+        print(est2.summary())
+        return est2
+
     @property
     def rsq(self):
         #slope, intercept, r_value, p_value, std_err = stats.linregress(self.x.T, self.y)
@@ -119,50 +133,92 @@ class ElectricityRegressionModel(object):
         plt.savefig('files\\{}'.format(title))
         plt.close()
         
-    def plot_3d(self):
-        x = self.X2d[self.X2d.columns[0]]
-        y = self.X2d[self.X2d.columns[1]]
+    def plot_3d(self, closefigs=True):
+        x = self.X[self.X.columns[0]]
+        y = self.X[self.X.columns[1]]
+        lat1 = self.X[self.X.columns[2]].mean()
+        lat2 = self.X[self.X.columns[3]].mean()
         z = self.y
+
+        fig = plt.figure(figsize=(24, 8))
+        ax1 = fig.add_subplot(231, projection='3d')
+        ax2 = fig.add_subplot(232, projection='3d')
+        ax3 = fig.add_subplot(233, projection='3d')
+
+        axes = [ax1, ax2, ax3]
+
+        self.plot_3d_row(x, y, z, lat1, lat2, fig, axes)
+
+
+        x = self.X[self.X.columns[2]]
+        y = self.X[self.X.columns[3]]
+        lat1 = self.X[self.X.columns[0]].mean()
+        lat2 = self.X[self.X.columns[1]].mean()
+        z = self.y
+
+        ax4 = fig.add_subplot(234, projection='3d')
+        ax5 = fig.add_subplot(235, projection='3d')
+        ax6 = fig.add_subplot(236, projection='3d')
+
+        axes = [ax4, ax5, ax6]
+
+        self.plot_3d_row(x, y, z, lat1, lat2, fig, axes)
+
+        try:
+            fig.suptitle(
+                '''$R^2$: {:.2f}\n{} coef: {:.2f}, {} coef: {:.2f}
+                {} coef: {:.2f}, {} coef: {:.2f}
+                intercept: {:.2f}
+                '''.format(
+                    self.rsq, 
+                    self.X.columns[0],
+                    self.model.coef_[0],
+                    self.X.columns[1],
+                    self.model.coef_[1],
+                    self.X.columns[2],
+                    self.model.coef_[2],
+                    self.X.columns[3],
+                    self.model.coef_[3],
+                    self.model.intercept_,
+                    ), fontsize=10
+                )
+        except AttributeError:
+            fig.suptitle(
+                '$R^2$: {:.2f}'.format(self.rsq,), fontsize=10
+                )
+            
+            
+        fig.tight_layout()
+        plt.savefig('files\\Multivariate svr {}'.format(self.month.date()))
+        if closefigs:
+            plt.close()
+
+
+    def plot_3d_row(self, x, y, z, lat1, lat2, fig, axes):
         x_pred = np.linspace(np.min(x), np.max(x), 100)   # range of elec purchase values
         y_pred = np.linspace(np.min(y), np.max(y), 100)  # range of purchase rate values
-        xx_pred, yy_pred = np.meshgrid(x_pred, y_pred)
-        model_viz = np.array([xx_pred.flatten(), yy_pred.flatten()]).T
+        xx_pred, yy_pred, lat1_pred, lat2_pred = np.meshgrid(x_pred, y_pred, lat1, lat2)
+        model_viz = np.array([xx_pred.flatten(), yy_pred.flatten(), 
+                              lat1_pred.flatten(), lat2_pred.flatten()]).T
         predicted = self.predict(model_viz)
         plt.style.use('default')
 
-        fig = plt.figure(figsize=(12, 4))
 
-        ax1 = fig.add_subplot(131, projection='3d')
-        ax2 = fig.add_subplot(132, projection='3d')
-        ax3 = fig.add_subplot(133, projection='3d')
+        [ax1, ax2, ax3] = axes
 
-        axes = [ax1, ax2, ax3]
 
         for ax in axes:
             ax.plot(x, y, z, color='k', zorder=15, linestyle='none', marker='o', alpha=0.5)
             ax.scatter(xx_pred.flatten(), yy_pred.flatten(), predicted, facecolor=(0,0,0,0), s=20, edgecolor='#70b3f0')
-            ax.set_xlabel('log(days without elec)', fontsize=12)
-            ax.set_ylabel('log(6 month\npurchase rate)', fontsize=12)
-            ax.set_zlabel('log(Future elec\npurchase rate)', fontsize=12)
+            ax.set_xlabel('{}'.format(x.name), fontsize=12)
+            ax.set_ylabel('{}'.format(y.name), fontsize=12)
+            ax.set_zlabel('loss on remainder', fontsize=12)
             ax.locator_params(nbins=4, axis='x')
             ax.locator_params(nbins=5, axis='x')
 
         ax1.view_init(elev=28, azim=120)
         ax2.view_init(elev=4, azim=114)
         ax3.view_init(elev=60, azim=165)
-        
-        fig.suptitle(
-            '$R^2$: {:.2f}\ncoef1: {:.2f}, coef2: {:.2f}\nexp(intercept): {:.2f}'.format(
-                self.rsq, 
-                self.model.coef_[0],
-                self.model.coef_[1],
-                np.exp(self.model.intercept_),
-                ), fontsize=20
-            )
-        
-        fig.tight_layout()
-        plt.savefig('files\\Multivariate regression {} loglog'.format(self.month.date()))
-        plt.close()
 
 
     def plot_4d(self, col_to_drop='ln_cum_paymts'):
@@ -179,12 +235,13 @@ class ElectricityRegressionModel(object):
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         img = ax.scatter(x, y, z, c=c, cmap=plt.get_cmap('bwr'))
-        #cbar = fig.colorbar(img)
+        cbar = fig.colorbar(img)
         
         ax.set_xlabel('{}'.format(x.name), fontsize=12)
         ax.set_ylabel('{}'.format(y.name), fontsize=12)
         ax.set_zlabel('{}'.format(z.name), fontsize=12)
         #cbar.ax.set_ylabel('future purchase rate', fontsize=12)
+        cbar.ax.set_ylabel('loss on remainder', fontsize=12)
         
         plt.title('{}'.format(self.month.date()))
 
@@ -193,38 +250,58 @@ class ElectricityRegressionModel(object):
     
 
 def run_all_models():
+    rmds = RegModelDatasets()
+
     model_dict = {}
     model_dict2 = {}
     for month in pd.date_range('Jan-2018', 'Nov-2020', freq='M'):
-        model_type = LinearRegression(fit_intercept=False)
+        #model_type = LinearRegression(fit_intercept=False)
         #model_type = HuberRegressor(fit_intercept=True)
         #model_dict[month] = RatesRegressionModel(mpp.mask(fully_paid), month, LinearRegression(fit_intercept=False))
         #model_dict[month] = ELRegressionModel(bd, month,  HuberRegressor(fit_intercept=True))
-        model_dict[month] = ElectricityRegressionModel(dfts, mpp, month, 
-                                                       LinearRegression(fit_intercept=True),
-                                                       multivariate=False)
+        # model_dict[month] = ElectricityRegressionModel(dfts, mpp, month, 
+        #                                                LinearRegression(fit_intercept=True),
+        #                                                multivariate=False)
         #model_dict[month].fit()
         #model_dict[month].plot_univariate('univariate')
 
-        model_dict2[month] = ElectricityRegressionModel(dfts, mpp, month, 
-                                                        LinearRegression(fit_intercept=True),
-                                                        #SVR(),
-                                                        multivariate=True)
-        model_dict2[month].fit()
+        model_dict2[month] = erm = ElectricityRegressionModel(rmds, month, 
+                                                        #LinearRegression(fit_intercept=True),
+                                                        SVR(),
+                                                        #SVC(),
+                                                        )
+        try:
+            erm.fit()
+        except ValueError as e:
+            print(month, e)
+            print(erm.X.isna().sum())
+            print(erm.y.isna().sum())
         model_dict2[month].plot_3d()
+        print(erm.rsq)
+    return model_dict2, rmds
         
+def one_month_example():
+    rmds = RegModelDatasets()
+    month = pd.Timestamp('30-09-2018')
+    #month = pd.Timestamp('2020-04-30')
+    month = pd.Timestamp('31-May-2018')
+    erm = ElectricityRegressionModel(rmds, month, model=LinearRegression())
+    erm.plot_4d(col_to_drop='ln_cum_paymts')
+    erm.plot_4d(col_to_drop='ln_tokens_left')
+    return erm, rmds
 
+def losses_are_u_shaped():
+    rmds.loss_on_remainder.stack().plot(kind='hist', bins=100)
 
 if __name__ == "__main__":
 
-    
     margin = 0.0
     
-    rmds = RegModelDatasets()
-    month = pd.Timestamp('31-09-2018')
-    erm = ElectricityRegressionModel(rmds, month,model=LinearRegression())
-    erm.plot_4d()
-    erm.plot_4d(col_to_drop='ln_tokens_left')
+    model_dict2, rmds = run_all_models()
+    #erm, rmds = one_month_example()
+
+
+
     
 def predict_EL():    
     vals=mcpp.iloc[1:-1].apply(apply_model, args=(model_dict,), axis=1)    
