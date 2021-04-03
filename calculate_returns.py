@@ -40,67 +40,125 @@ class RegModelDatasets(object):
 
         #self.cinfo = 
 
-class ElectricityRegressionModel(object):
+class ElectricityModel(object):
     def __init__(self, rmds, month, 
                  model=LinearRegression(),
                  ):
         
-        self.mpp = rmds.mpp
-        
+        self.rmds = rmds
         self.month = month
         self.model = model
 
         self._hr = self.hist_rate(6)
         self._fr = self.future_rate()
         
-
-        x1 = np.log(1+rmds.dooep.loc[month]).rename('ln_days_no_elec')
+        
+    def feature_selection(self):
+        rmds = self.rmds
+        x1 = np.log(1+rmds.dooep.loc[self.month]).rename('ln_days_no_elec')
         x2 = np.log(0.00000001 + self._hr).rename('ln_hist_rate')
-        x3 = np.log(rmds.mcpp.loc[month].clip(0,1)).rename('ln_cum_paymts')
-        x4 = np.log(1+ rmds.tokens_remaining.loc[month]).rename('ln_tokens_left')
+        x3 = np.log(rmds.mcpp.loc[self.month].clip(0,1)).rename('ln_cum_paymts')
+        x4 = np.log(1+ rmds.tokens_remaining.loc[self.month]).rename('ln_tokens_left')
         
-        ## old
-        #y = tokens_pivot.loc[month:].sum() / tokens_pivot.loc[month:].index.size
-        #y = np.log(0.00000001 + self._fr)
-        #y = self._fr <= 0.01
-        #y = np.log(0.00000001 + rmds.loss_on_remainder.loc[month])
-        #y = rmds.loss_on_remainder.loc[month] > 0.95
-        y = rmds.loss_on_remainder.loc[month]
-        #y = pd.cut(rmds.loss_on_remainder.loc[month], bins=3, labels=['good', 'middle', 'bad'])
-
-
         X = pd.concat([x1, x2, x3, x4], axis=1)
-        #X2d = pd.concat([x1, x2,], axis=1)
+        return X
 
-        if hasattr(y, 'cat'):  #TypeError: data type 'category' not understood
-            self.X = X
-            self.y = y
-        else:
-            mask = ~np.isnan(X).any(axis=1) & ~np.isnan(y)
-            self.X = X[mask]
-            self.y = y[mask]
-
-        
     def hist_rate(self, num_months=6):
         self.num_months = num_months
-        hist_df = self.mpp.loc[:self.month].iloc[-num_months:]
+        hist_df = self.rmds.mpp.loc[:self.month].iloc[-num_months:]
         r = hist_df.sum() / hist_df.index.size
         return r
 
     def future_rate(self, num_months=None):
         if num_months is None:
-            future_df = self.mpp.loc[self.month:]
+            future_df = self.rmds.mpp.loc[self.month:]
             r = future_df.sum() / future_df.index.size
             return r
 
-    def fit_2feature(self):
-        self.model.fit(self.X2d, self.y)
-        
+  
     def fit(self):
         self.model.fit(self.X, self.y)
 
     def predict(self, X):
         return self.model.predict(X)
+
+
+
+
+
+class ElectricityClassifierModel(ElectricityModel):
+    def __init__(self, rmds, month, model):
+        super().__init__(rmds, month, model)
+
+        X = self.feature_selection()
+
+        #y = self._fr <= 0.01
+        #y = rmds.loss_on_remainder.loc[month] > 0.95
+        
+        ## loss on remainder is U shaped
+        y = pd.cut(rmds.loss_on_remainder.loc[month], bins=[-0.001, 0.05, 0.95, 1], labels=[0,1,2]).rename('loss_cat') # #labels=['good', 'middle', 'bad'])
+
+        ## paid off/not paid off after 3 years
+        #y = rmds.final_loss > 0.05
+
+
+        # if hasattr(y, 'cat'):  #TypeError: data type 'category' not understood
+        #     self.X = X
+        #     self.y = y
+        # else:
+        mask = ~np.isnan(X).any(axis=1)
+        self.X = X[mask]
+        self.y = y[mask]
+
+
+    @property
+    def score(self):
+        return self.model.score(self.X, self.y)
+
+
+    def plot_4d(self, col_to_drop='ln_cum_paymts'):
+        X = self.X.copy().drop(columns=[col_to_drop])
+        x = X['ln_days_no_elec']
+        y = X['ln_hist_rate']
+        #z = self.X['ln_cum_paymts']
+        z = X[X.columns[-1]] #ln_tokens_left
+
+        #c = np.exp(self.y) - 0.00000001
+        c = self.y
+        colors = {0:'green', 1:'black', 2:'red'}
+        
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        img = ax.scatter(x, y, z, c=c.apply(lambda x: colors[x]),) #cmap=plt.get_cmap('bwr'))
+        #cbar = fig.colorbar(img)
+        
+        ax.set_xlabel('{}'.format(x.name), fontsize=12)
+        ax.set_ylabel('{}'.format(y.name), fontsize=12)
+        ax.set_zlabel('{}'.format(z.name), fontsize=12)
+        #cbar.ax.set_ylabel('{}'.format(c.name), fontsize=12)
+        plt.title('{}'.format(self.month.date()))
+
+        plt.show()
+
+
+class ElectricityRegressionModel(ElectricityModel):
+    def __init__(self, rmds, month, model,):
+        super().__init__(rmds, month, model)
+
+        X = self.feature_selection()
+        
+        ## old
+        #y = tokens_pivot.loc[month:].sum() / tokens_pivot.loc[month:].index.size
+        #y = np.log(0.00000001 + self._fr)
+        #y = np.log(0.00000001 + rmds.loss_on_remainder.loc[month])
+        #y = rmds.loss_on_remainder.loc[month]
+        y = rmds.final_loss.rename('final_loss')  # should be just as easily predicted as loss on remainder when mcpp is one of the features
+
+        mask = ~np.isnan(X).any(axis=1) & ~np.isnan(y)
+        self.X = X[mask]
+        self.y = y[mask]
+        
+
     
     def print_stats(self):
         X2 = sm.add_constant(self.X)
@@ -189,37 +247,9 @@ class ElectricityRegressionModel(object):
             
             
         fig.tight_layout()
-        plt.savefig('files\\Multivariate svr {}'.format(self.month.date()))
+        plt.savefig('files\\Multivariate reg {}'.format(self.month.date()))
         if closefigs:
             plt.close()
-
-
-    def plot_3d_row(self, x, y, z, lat1, lat2, fig, axes):
-        x_pred = np.linspace(np.min(x), np.max(x), 100)   # range of elec purchase values
-        y_pred = np.linspace(np.min(y), np.max(y), 100)  # range of purchase rate values
-        xx_pred, yy_pred, lat1_pred, lat2_pred = np.meshgrid(x_pred, y_pred, lat1, lat2)
-        model_viz = np.array([xx_pred.flatten(), yy_pred.flatten(), 
-                              lat1_pred.flatten(), lat2_pred.flatten()]).T
-        predicted = self.predict(model_viz)
-        plt.style.use('default')
-
-
-        [ax1, ax2, ax3] = axes
-
-
-        for ax in axes:
-            ax.plot(x, y, z, color='k', zorder=15, linestyle='none', marker='o', alpha=0.5)
-            ax.scatter(xx_pred.flatten(), yy_pred.flatten(), predicted, facecolor=(0,0,0,0), s=20, edgecolor='#70b3f0')
-            ax.set_xlabel('{}'.format(x.name), fontsize=12)
-            ax.set_ylabel('{}'.format(y.name), fontsize=12)
-            ax.set_zlabel('loss on remainder', fontsize=12)
-            ax.locator_params(nbins=4, axis='x')
-            ax.locator_params(nbins=5, axis='x')
-
-        ax1.view_init(elev=28, azim=120)
-        ax2.view_init(elev=4, azim=114)
-        ax3.view_init(elev=60, azim=165)
-
 
     def plot_4d(self, col_to_drop='ln_cum_paymts'):
         X = self.X.copy().drop(columns=[col_to_drop])
@@ -247,6 +277,34 @@ class ElectricityRegressionModel(object):
 
         plt.show()
 
+
+    def plot_3d_row(self, x, y, z, lat1, lat2, fig, axes):
+        x_pred = np.linspace(np.min(x), np.max(x), 100)   # range of elec purchase values
+        y_pred = np.linspace(np.min(y), np.max(y), 100)  # range of purchase rate values
+        xx_pred, yy_pred, lat1_pred, lat2_pred = np.meshgrid(x_pred, y_pred, lat1, lat2)
+        model_viz = np.array([xx_pred.flatten(), yy_pred.flatten(), 
+                              lat1_pred.flatten(), lat2_pred.flatten()]).T
+        predicted = self.predict(model_viz)
+        plt.style.use('default')
+
+
+        [ax1, ax2, ax3] = axes
+
+
+        for ax in axes:
+            ax.plot(x, y, z, color='k', zorder=15, linestyle='none', marker='o', alpha=0.5)
+            ax.scatter(xx_pred.flatten(), yy_pred.flatten(), predicted, facecolor=(0,0,0,0), s=20, edgecolor='#70b3f0')
+            ax.set_xlabel('{}'.format(x.name), fontsize=12)
+            ax.set_ylabel('{}'.format(y.name), fontsize=12)
+            ax.set_zlabel('{}'.format(z.name), fontsize=12)
+            ax.locator_params(nbins=4, axis='x')
+            ax.locator_params(nbins=5, axis='x')
+
+        ax1.view_init(elev=28, azim=120)
+        ax2.view_init(elev=4, azim=114)
+        ax3.view_init(elev=60, azim=165)
+
+
     
 
 def run_all_models():
@@ -266,8 +324,8 @@ def run_all_models():
         #model_dict[month].plot_univariate('univariate')
 
         model_dict2[month] = erm = ElectricityRegressionModel(rmds, month, 
-                                                        #LinearRegression(fit_intercept=True),
-                                                        SVR(),
+                                                        LinearRegression(fit_intercept=True),
+                                                        #SVR(),
                                                         #SVC(),
                                                         )
         try:
@@ -284,7 +342,7 @@ def one_month_example():
     rmds = RegModelDatasets()
     month = pd.Timestamp('30-09-2018')
     #month = pd.Timestamp('2020-04-30')
-    month = pd.Timestamp('31-May-2018')
+    #month = pd.Timestamp('31-May-2018')
     erm = ElectricityRegressionModel(rmds, month, model=LinearRegression())
     erm.plot_4d(col_to_drop='ln_cum_paymts')
     erm.plot_4d(col_to_drop='ln_tokens_left')
@@ -292,14 +350,6 @@ def one_month_example():
 
 def losses_are_u_shaped():
     rmds.loss_on_remainder.stack().plot(kind='hist', bins=100)
-
-if __name__ == "__main__":
-
-    margin = 0.0
-    
-    model_dict2, rmds = run_all_models()
-    #erm, rmds = one_month_example()
-
 
 
     
@@ -321,6 +371,27 @@ def predict_EL():
     
     cm_2018 = norm_rets.unstack(1).loc['2018'].corr()
     cm_2018.stack().describe()
+
+
+def train_classifier_one_month():
+    rmds = RegModelDatasets()
+    month = pd.Timestamp('30-09-2018')
+    #month = pd.Timestamp('2020-04-30')
+    #month = pd.Timestamp('31-May-2018')
+    ecm = ElectricityClassifierModel(rmds, month, model=SVC())
+    ecm.fit()
+    ecm.plot_4d(col_to_drop='ln_cum_paymts')
+    ecm.plot_4d(col_to_drop='ln_tokens_left')
+    print(ecm.score)
+    return ecm, rmds
+
+if __name__ == "__main__":
+
+    margin = 0.0
+    
+    #model_dict2, rmds = run_all_models()
+    #erm, rmds = one_month_example()
+    ecm, rmds = train_classifier_one_month()
 
 
 
@@ -513,7 +584,6 @@ Can we bck out Rsq from par30 flags?
 ''' 
 * slope - rate of paying/usage number of days of paying per month 
 * how much impact does one default have on future repayments 
-* regress slope in last x months to slope in remaining time 
 * why are rets so wierd from Dec 2019
 * look at this from a days of electricity used perspective
 * for everyone who fully pays, how many unique payments they make 
