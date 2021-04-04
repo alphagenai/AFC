@@ -26,17 +26,18 @@ class RegModelDatasets(object):
         self.dcpp = dcpp = bd.daily_cumulative_percent_sdf_pivot
         self.mcpp = mcpp = bd.monthly_cumulative_percent_sdf_pivot
         self.mpp = bd.monthly_percent_pivot
-        self.fully_paid = fully_paid = bd.monthly_fully_paid
+        self.monthly_fully_paid = monthly_fully_paid = bd.daily_fully_paid
         self.cdf = bd.contract_values
-        self.dfts = dfts = bd.daily_full_ts
+        self.dfts = dfts = bd.daily_ts #excludes fully paid
         self.daily_fully_paid = daily_fully_paid = bd.daily_fully_paid
         final_value = dcpp.iloc[-1]
         self.final_loss = final_loss = 1 - final_value
-        self.remainder = remainder = (1 - mcpp).mask(fully_paid)
-        self.loss_on_remainder = (final_loss/remainder).clip(0,1).mask(fully_paid)
+        self.remainder = remainder = (1 - mcpp).mask(daily_fully_paid)
+        self.loss_on_remainder = (final_loss/remainder).clip(0,1).mask(monthly_fully_paid)
         self.dooep = dfts['days_out_of_elec'].unstack(0).mask(daily_fully_paid)
         self.tokens_pivot = dfts['Duration'].unstack(0).mask(daily_fully_paid)
         self.tokens_remaining = dfts.elec_transaction_cumsum.unstack(0).mask(daily_fully_paid)
+        self.cum_num_defaults = dfts['PAR30+'].unstack(0).diff().replace(-1,0).cumsum()
 
         #self.cinfo = 
 
@@ -83,6 +84,19 @@ class ElectricityModel(object):
         return self.model.predict(X)
 
 
+    def univariate_effects(self):
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
+        ax1.scatter(self.X[self.X.columns[0]], self.y)
+        ax1.set_title(self.X.columns[0],)
+
+        ax2.scatter(self.X[self.X.columns[1]], self.y)
+        ax2.set_title(self.X.columns[1],)
+
+        ax3.scatter(self.X[self.X.columns[2]], self.y)
+        ax3.set_title(self.X.columns[2],)
+
+        ax4.scatter(self.X[self.X.columns[3]], self.y)
+        ax4.set_title(self.X.columns[3],)
 
 
 
@@ -142,7 +156,7 @@ class ElectricityClassifierModel(ElectricityModel):
 
 
 class ElectricityRegressionModel(ElectricityModel):
-    def __init__(self, rmds, month, model,):
+    def __init__(self, rmds, month, model, target='final_loss'):
         super().__init__(rmds, month, model)
 
         X = self.feature_selection()
@@ -151,8 +165,11 @@ class ElectricityRegressionModel(ElectricityModel):
         #y = tokens_pivot.loc[month:].sum() / tokens_pivot.loc[month:].index.size
         #y = np.log(0.00000001 + self._fr)
         #y = np.log(0.00000001 + rmds.loss_on_remainder.loc[month])
-        #y = rmds.loss_on_remainder.loc[month]
-        y = rmds.final_loss.rename('final_loss')  # should be just as easily predicted as loss on remainder when mcpp is one of the features
+
+        if target == 'final_loss':
+            y = rmds.final_loss.rename('final_loss')  # should be just as easily predicted as loss on remainder when mcpp is one of the features
+        elif target == 'loss_on_remainder':
+            y = rmds.loss_on_remainder.loc[month]
 
         mask = ~np.isnan(X).any(axis=1) & ~np.isnan(y)
         self.X = X[mask]
@@ -385,14 +402,20 @@ def train_classifier_one_month():
     print(ecm.score)
     return ecm, rmds
 
+def univariate_effects():
+    month = pd.Timestamp('30-09-2018')
+    rmds = RegModelDatasets()
+    em = ElectricityRegressionModel(rmds, month, model=None, target='loss_on_remainder')
+    em.univariate_effects()
+
 if __name__ == "__main__":
 
     margin = 0.0
     
     #model_dict2, rmds = run_all_models()
     #erm, rmds = one_month_example()
-    ecm, rmds = train_classifier_one_month()
-
+    #ecm, rmds = train_classifier_one_month()
+    univariate_effects()
 
 
 
@@ -583,9 +606,17 @@ Can we bck out Rsq from par30 flags?
 
 ''' 
 * slope - rate of paying/usage number of days of paying per month 
-* how much impact does one default have on future repayments 
+* how much impact does one default have on future repayments  - see par30_analysis2
 * why are rets so wierd from Dec 2019
-* look at this from a days of electricity used perspective
+* look at this from a days of electricity used perspective - elec used correlated with mcpp
+        plt.scatter(rmds.tokens_pivot.loc[:month].sum(), rmds.mcpp.loc[month])
+
 * for everyone who fully pays, how many unique payments they make 
+
+        plt.scatter(bd.df.groupby(level=0)['AmountPaid'].count(), final_loss)
+        bd.df.groupby(level=0)['AmountPaid'].count()[final_loss<0.01].plot(kind='hist', bins=20)
+
 * past electricity usage vs future electricity usage
+    plt.scatter(rmds.tokens_pivot.loc[:month].sum(), rmds.tokens_pivot.loc[month:].sum())
+
 '''
