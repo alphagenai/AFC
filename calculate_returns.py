@@ -15,6 +15,7 @@ from sklearn.linear_model import LinearRegression, HuberRegressor
 from sklearn.svm import SVR, SVC
 from scipy import stats
 from mpl_toolkits.mplot3d import Axes3D
+from sklearn.model_selection import cross_val_score
 
 from basic_datasets import BasicDatasets
 
@@ -81,8 +82,7 @@ class ElectricityModel(object):
         self.model.fit(self.X, self.y)
 
     def predict(self, X):
-        self._yhat = self.model.predict(X).clip(0,1)
-        return self._yhat
+        return self.model.predict(X).clip(0,1)
 
 
     def univariate_effects(self):
@@ -103,8 +103,19 @@ class ElectricityModel(object):
 
     def modeled_values(self):
         s = self.rmds.mcpp.loc[self.month][self.mask]
-        result = s + (1-s)*(1-self._yhat) 
+        result = s + (1-s)*(1-self.yhat) 
         return result
+
+    def cross_val_score(self):
+        return cross_val_score(self.model, self.X, self.y, cv=5)
+
+    @property
+    def yhat(self):
+        return self.model.predict(self.X).clip(0,1)
+
+    @property
+    def residuals(self):
+        return self.y - self.yhat
 
 
 class ElectricityClassifierModel(ElectricityModel):
@@ -193,9 +204,6 @@ class ElectricityRegressionModel(ElectricityModel):
 
     @property
     def rsq(self):
-        #slope, intercept, r_value, p_value, std_err = stats.linregress(self.x.T, self.y)
-        #print(r_value**2)
-        #print(self.model.score(self.x, self.y))
         return self.model.score(self.X, self.y)
 
     def plot_pred_v_act(self):
@@ -208,12 +216,12 @@ class ElectricityRegressionModel(ElectricityModel):
         plt.savefig('files\\reg model residuals {}'.format(self.month.date()))
         plt.close()
 
-    @property
-    def residuals(self):
-        return self.y - self._yhat
-
     def plot_residuals(self):
-        plt.hist(self.residuals, bins=50)
+        fig, ax = plt.subplots()
+        ax.hist(self.residuals, bins=50)
+        plt.title('{}'.format(self.month.date()))
+        plt.savefig('files\\residuals {}'.format(self.month.date()))
+        plt.close()
         
     def plot_univariate(self, substr=None):
         fig, ax = plt.subplots()
@@ -376,7 +384,7 @@ def run_all_models():
             print(erm.X.isna().sum())
             print(erm.y.isna().sum())
         #model_dict2[month].plot_3d()
-        print(erm.rsq)
+        print('{}: {}'.format(erm.month.date(), erm.cross_val_score()))
         erm.plot_residuals()
     return model_dict2, rmds
         
@@ -444,7 +452,7 @@ def train_classifier_one_month():
     ecm.fit()
     ecm.plot_4d(col_to_drop='ln_cum_paymts')
     ecm.plot_4d(col_to_drop='ln_tokens_left')
-    print(ecm.score)
+    print(ecm.cross_val_score())
     return ecm, rmds
 
 def univariate_effects():
@@ -464,7 +472,6 @@ if __name__ == "__main__":
     ## not sure if this looks right really:
     rets = create_full_rets_ts(model_dict, rmds)
     plt.scatter(rets.fillna(0).stack(), rmds.mpp.loc['2018-01-31':'2020-10-31'].stack())
-    plt.scatter()
 
 
 
