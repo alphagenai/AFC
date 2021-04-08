@@ -139,6 +139,11 @@ class BasicDatasets(object):
                         right_index=True)
         return full_df[full_df['cum_val'] < 0.999]
     
+    @property
+    def par30_daily_pivot(self):
+        return  self.daily_full_ts['PAR30+'].unstack(0).mask(self.daily_fully_paid)
+
+    
 
 
 cohort='dec_17'
