@@ -24,15 +24,15 @@ class RegModelDatasets(object):
     def __init__(self, ):
         bd = BasicDatasets()
         self.dcpp = dcpp = bd.daily_cumulative_percent_sdf_pivot
-        self.mcpp = mcpp = bd.monthly_cumulative_percent_sdf_pivot
         self.mpp = bd.monthly_percent_pivot
-        self.monthly_fully_paid = monthly_fully_paid = bd.daily_fully_paid
+        self.monthly_fully_paid = monthly_fully_paid = bd.monthly_fully_paid
+        self.mcpp = mcpp = bd.monthly_cumulative_percent_sdf_pivot.mask(monthly_fully_paid)
         self.cdf = bd.contract_values
         self.dfts = dfts = bd.daily_ts #excludes fully paid
         self.daily_fully_paid = daily_fully_paid = bd.daily_fully_paid
-        final_value = dcpp.iloc[-1]
+        final_value = dcpp.iloc[-1].clip(0,1)
         self.final_loss = final_loss = 1 - final_value
-        self.remainder = remainder = (1 - mcpp).mask(daily_fully_paid)
+        self.remainder = remainder = (1 - mcpp)
         self.loss_on_remainder = (final_loss/remainder).clip(0,1).mask(monthly_fully_paid)
         self.dooep = dfts['days_out_of_elec'].unstack(0).mask(daily_fully_paid)
         self.tokens_pivot = dfts['Duration'].unstack(0).mask(daily_fully_paid)
@@ -51,7 +51,7 @@ class ElectricityModel(object):
         self.model = model
 
         self._hr = self.hist_rate(6)
-        self._fr = self.future_rate()
+        #self._fr = self.future_rate()
         
         
     def feature_selection(self):
@@ -81,7 +81,8 @@ class ElectricityModel(object):
         self.model.fit(self.X, self.y)
 
     def predict(self, X):
-        return self.model.predict(X)
+        self._yhat = self.model.predict(X).clip(0,1)
+        return self._yhat
 
 
     def univariate_effects(self):
@@ -98,6 +99,12 @@ class ElectricityModel(object):
         ax4.scatter(self.X[self.X.columns[3]], self.y)
         ax4.set_title(self.X.columns[3],)
 
+        plt.title('{}'.format(self.month))
+
+    def modeled_values(self):
+        s = self.rmds.mcpp.loc[self.month][self.mask]
+        result = s + (1-s)*(1-self._yhat) 
+        return result
 
 
 class ElectricityClassifierModel(ElectricityModel):
@@ -120,9 +127,9 @@ class ElectricityClassifierModel(ElectricityModel):
         #     self.X = X
         #     self.y = y
         # else:
-        mask = ~np.isnan(X).any(axis=1)
-        self.X = X[mask]
-        self.y = y[mask]
+        #mask = ~np.isnan(X).any(axis=1)
+        self.X = X#[mask]
+        self.y = y#[mask]
 
 
     @property
@@ -156,7 +163,7 @@ class ElectricityClassifierModel(ElectricityModel):
 
 
 class ElectricityRegressionModel(ElectricityModel):
-    def __init__(self, rmds, month, model, target='final_loss'):
+    def __init__(self, rmds, month, model, target='loss_on_remainder'):
         super().__init__(rmds, month, model)
 
         X = self.feature_selection()
@@ -171,7 +178,7 @@ class ElectricityRegressionModel(ElectricityModel):
         elif target == 'loss_on_remainder':
             y = rmds.loss_on_remainder.loc[month]
 
-        mask = ~np.isnan(X).any(axis=1) & ~np.isnan(y)
+        self.mask = mask = ~np.isnan(X).any(axis=1) & ~np.isnan(y)
         self.X = X[mask]
         self.y = y[mask]
         
@@ -191,6 +198,22 @@ class ElectricityRegressionModel(ElectricityModel):
         #print(self.model.score(self.x, self.y))
         return self.model.score(self.X, self.y)
 
+    def plot_pred_v_act(self):
+        yhat = self.predict(self.X)
+        fig, ax = plt.subplots()
+        plt.scatter(x=self.y, y=yhat)
+        ax.set_xlabel('actual')
+        ax.set_ylabel('predicted')
+        plt.title('{}'.format(self.y.name))
+        plt.savefig('files\\reg model residuals {}'.format(self.month.date()))
+        plt.close()
+
+    @property
+    def residuals(self):
+        return self.y - self._yhat
+
+    def plot_residuals(self):
+        plt.hist(self.residuals, bins=50)
         
     def plot_univariate(self, substr=None):
         fig, ax = plt.subplots()
@@ -344,6 +367,7 @@ def run_all_models():
                                                         LinearRegression(fit_intercept=True),
                                                         #SVR(),
                                                         #SVC(),
+                                                        target='loss_on_remainder'
                                                         )
         try:
             erm.fit()
@@ -351,8 +375,9 @@ def run_all_models():
             print(month, e)
             print(erm.X.isna().sum())
             print(erm.y.isna().sum())
-        model_dict2[month].plot_3d()
+        #model_dict2[month].plot_3d()
         print(erm.rsq)
+        erm.plot_residuals()
     return model_dict2, rmds
         
 def one_month_example():
@@ -368,13 +393,25 @@ def one_month_example():
 def losses_are_u_shaped():
     rmds.loss_on_remainder.stack().plot(kind='hist', bins=100)
 
+def apply_model(s, model_dict):
+    ''' s is the cumulative payments series '''
+    month = s.name
+    model = model_dict[month]
+    EL = model.predict(model.X)
+    try:
+        result = s + (1-s)*(1-EL)
+    except ValueError:
+        print(month, model.y)
+    return result
 
     
-def predict_EL():    
-    vals=mcpp.iloc[1:-1].apply(apply_model, args=(model_dict,), axis=1)    
-    
-    rets=vals.diff()
+def create_full_rets_ts(model_dict, rmds):
+    result = calc_vals(model_dict, rmds)
+    vals = pd.concat([r for r in result], axis=1).T
+    rets = vals.diff()
+    return rets
     rs = rets.stack()
+
     rs.plot(kind='hist', bins=50)
     
     norm_rets = (rs - rs.mean()) / rs.std()
@@ -389,6 +426,14 @@ def predict_EL():
     cm_2018 = norm_rets.unstack(1).loc['2018'].corr()
     cm_2018.stack().describe()
 
+def calc_vals(model_dict, rmds):
+    for month, model in model_dict.items():
+        #s = rmds.mcpp.loc[month][model.mask]
+        #result = s + (1-s)*(1-model._yhat) 
+        result = model.modeled_values()
+        #print(result.describe())
+        yield result
+        
 
 def train_classifier_one_month():
     rmds = RegModelDatasets()
@@ -403,8 +448,8 @@ def train_classifier_one_month():
     return ecm, rmds
 
 def univariate_effects():
-    month = pd.Timestamp('30-09-2018')
     rmds = RegModelDatasets()
+    month = pd.Timestamp('30-06-2019')
     em = ElectricityRegressionModel(rmds, month, model=None, target='loss_on_remainder')
     em.univariate_effects()
 
@@ -412,13 +457,14 @@ if __name__ == "__main__":
 
     margin = 0.0
     
-    #model_dict2, rmds = run_all_models()
+    model_dict, rmds = run_all_models()
     #erm, rmds = one_month_example()
     #ecm, rmds = train_classifier_one_month()
-    univariate_effects()
-
-
-
+    #univariate_effects()
+    ## not sure if this looks right really:
+    rets = create_full_rets_ts(model_dict, rmds)
+    plt.scatter(rets.fillna(0).stack(), rmds.mpp.loc['2018-01-31':'2020-10-31'].stack())
+    plt.scatter()
 
 
 
@@ -524,9 +570,6 @@ class RatesRegressionModel(object):
             future_df = self.mpp.loc[month:]
             r = future_df.sum() / future_df.index.size
             return r
-    
-    def predict(self, x):
-        return self.model.predict(x)
         
     def plot(self, ax=None):
         if ax is None:
@@ -557,11 +600,6 @@ def EL_model_predict(month):
     return model_dict[month].predict(np.array(one_ts.loc[month]).reshape((-1,1))).clip(0,1)[0]
     
 
-def apply_model(s, model_dict):
-    ''' s is the cumulative payments series '''
-    month = s.name
-    EL = model_dict[month].predict(np.array(s).reshape((-1,1))).clip(0,1)[0]
-    return s + (1-s)*(1-EL)
 
 
 def portfolio_expected_loss(dcpp):
@@ -619,4 +657,10 @@ Can we bck out Rsq from par30 flags?
 * past electricity usage vs future electricity usage
     plt.scatter(rmds.tokens_pivot.loc[:month].sum(), rmds.tokens_pivot.loc[month:].sum())
 
+
+* plot y vs y_hat
+plot each univariate variable against yhat
+
+* LOSS ON REMAINDER IS NEGATIVE??
+* some way of interpolating from global loss of approx 20%
 '''
